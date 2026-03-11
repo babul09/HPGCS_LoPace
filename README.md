@@ -1,25 +1,19 @@
-# LoPace
+# HPGCS / LoPace
+
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/connectaman/LoPace/main/screenshots/logo-text.png" alt="LoPace Logo" width="600"/>
 </div>
 
-**Lossless Optimized Prompt Accurate Compression Engine**
+**Hybrid Prompt Graph Compression System — Lossless Optimized Prompt Accurate Compression Engine**
 
-A professional, open-source Python package for compressing and decompressing prompts using multiple techniques: Zstd, Token-based (BPE), and Hybrid methods. Achieve up to 80% space reduction while maintaining perfect lossless reconstruction.
+A professional, open-source Python package for compressing and reconstructing prompts using a multi-layer graph-based pipeline. Achieve up to 80% space reduction while maintaining perfect lossless reconstruction.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![PyPI version](https://badge.fury.io/py/lopace.svg)](https://pypi.org/project/lopace/)
 [![🤗 Spaces](https://img.shields.io/badge/🤗%20Hugging%20Face-Spaces-blue)](https://huggingface.co/spaces/codewithaman/LoPace)
 [![arXiv](https://img.shields.io/badge/arXiv-Paper-b31b1b.svg)](https://arxiv.org/abs/2602.13266)
-
-<!-- <div align="center">
-  <a href="https://arxiv.org/abs/2602.13266">
-    <img src="https://raw.githubusercontent.com/connectaman/LoPace/main/paper/lopace-preprint-arxiv-01.png" alt="LoPace Research Paper - First Page" width="250" style="cursor: pointer; border: 1px solid #ddd; border-radius: 4px;">
-  </a>
-  <p><em>Click the image above to view the full research paper (PDF)</em></p>
-</div> -->
 
 ## The Problem: Storage Challenges with Large Prompts
 
@@ -33,465 +27,442 @@ When building LLM applications, storing prompts efficiently becomes a critical c
 
 - **⚡ Latency Issues**: Loading large prompts from storage adds latency to your application. Multiple LLM calls per user session multiply this problem, creating noticeable delays in response times.
 
-## The Solution: LoPace Compression Engine
+## The Solution: HPGCS Compression Engine
 
-LoPace solves these challenges by providing **lossless compression** that dramatically reduces storage requirements while maintaining fast compression and decompression speeds:
+HPGCS (Hybrid Prompt Graph Compression System) solves these challenges through a **nine-module pipeline** that combines structural graph decomposition, semantic clustering, BPE tokenization, and Zstandard entropy compression — all losslessly:
 
-- **📉 Up to 80% Space Reduction**: The hybrid compression method can reduce prompt storage by 70-80% on average, meaning you store 5x less data while maintaining perfect fidelity.
+- **📉 Up to 80% Space Reduction**: The multi-layer pipeline reduces prompt storage by 70–80% on average, storing 5× less data while maintaining perfect fidelity.
 
-- **⚡ Fast Processing**: Achieve 50-200 MB/s compression throughput with sub-linear scaling. Decompression is even faster (100-500 MB/s), ensuring minimal impact on application latency.
+- **⚡ Fast Processing**: 50–200 MB/s compression throughput with sub-linear scaling. Decompression is even faster (100–500 MB/s).
 
-- **✅ 100% Lossless**: Perfect reconstruction guarantees your prompts are identical to the original - no data loss, no corruption, no compromises.
+- **✅ 100% Lossless**: SHA-256 hash verification and exact-match reconstruction guarantee that every reconstructed prompt is identical to the original.
 
-- **🎯 Production-Ready**: Optimized for database storage with minimal memory footprint (under 10 MB for typical use cases) and excellent scalability for millions of prompts.
+- **🎯 Production-Ready**: SQLite-backed graph database with minimal memory footprint (under 10 MB for typical use cases) and excellent scalability.
 
-Whether you're storing system prompts for thousands of users, maintaining conversation histories, or caching LLM interactions, LoPace helps you optimize storage costs and improve performance without sacrificing data integrity.
+## HPGCS Pipeline Architecture
+
+### Compression Pipeline
+
+\`\`\`
+Prompt Input
+     ↓  Module 1 — PromptParser
+Structured Component Decomposition
+     ↓  Modules 2 & 3 — PromptGraphDecomposer + ReusableNodeManager
+Graph Representation + Node Deduplication
+     ↓  Module 4 — VectorSimilarityClusterer
+Semantic Cluster Assignment
+     ↓  Module 5 — ResidualTextTokenizer
+BPE Token Encoding + Binary Packing
+     ↓  Module 6 — LearnedCompressionEncoder
+Zstandard Entropy Compression
+     ↓  Module 7 — GraphStorageDatabase
+Persistent SQLite Storage
+\`\`\`
+
+### Reconstruction Pipeline
+
+\`\`\`
+Load from GraphStorageDatabase
+     ↓  Module 6 — LearnedCompressionEncoder (decode)
+Decompress Zstandard Blob
+     ↓  Module 8 — PromptReconstructionEngine
+Decode Latent Vector → Token Sequence → Original Prompt
+\`\`\`
+
+## Module Reference
+
+| # | Module | Class | Responsibility |
+|---|--------|-------|----------------|
+| 1 | `parser.py` | `PromptParser` | Rule-based segmentation into labelled components (System, User, Context, Tool, …) |
+| 2 | `graph.py` | `PromptGraphDecomposer` | Converts parsed components into a directed prompt graph |
+| 3 | `graph.py` | `ReusableNodeManager` | Deduplicates repeated nodes across the prompt corpus |
+| 4 | `clustering.py` | `VectorSimilarityClusterer` | Cosine-similarity clustering with sentence-transformer or n-gram fallback |
+| 5 | `tokenizer_module.py` | `ResidualTextTokenizer` | BPE tokenization (tiktoken) and binary packing |
+| 6 | `encoder.py` | `LearnedCompressionEncoder` | Zstandard entropy compression / decompression |
+| 7 | `storage.py` | `GraphStorageDatabase` | SQLite persistence for prompts, nodes, and clusters |
+| 8 | `reconstruction.py` | `PromptReconstructionEngine` | Lossless reconstruction with hash verification |
 
 ## Features
 
-- 🚀 **Three Compression Methods**:
-  - **Zstd**: Dictionary-based compression using Zstandard algorithm
-  - **Token**: Byte-Pair Encoding (BPE) tokenization with binary packing
-  - **Hybrid**: Combination of tokenization and Zstd (best compression ratio)
-
-- ✅ **Lossless**: Perfect reconstruction of original prompts
-- 📊 **Compression Statistics**: Analyze compression ratios and space savings
-- 🔧 **Simple API**: Easy-to-use interface for all compression methods
-- 🎯 **Database-Ready**: Optimized for storing prompts in databases
+- 🧩 **Nine-Module Pipeline**: Each stage is independently testable and replaceable
+- ✅ **Lossless**: Perfect reconstruction verified by SHA-256 hash matching and character-level exact match
+- 📊 **Rich Analytics**: Per-prompt metrics, cluster summaries, node graphs, and database statistics
+- 💾 **Persistent Storage**: SQLite-backed database keeps compressed prompts, reusable nodes, and cluster metadata
+- 🔧 **Simple API**: Single `HPGCS` class handles the full pipeline
+- 🔄 **Batch Compression**: Process lists of prompts in one call
+- 🎯 **Legacy Compatibility**: `PromptCompressor` (Zstd / Token / Hybrid) is still available for simpler use cases
 
 ## Installation
 
-```bash
+\`\`\`bash
 pip install lopace
-```
+\`\`\`
 
 ### Dependencies
 
-- `zstandard>=0.22.0` - For Zstd compression
-- `tiktoken>=0.5.0` - For BPE tokenization
+- `zstandard>=0.22.0` — Zstandard entropy compression
+- `tiktoken>=0.5.0` — BPE tokenization
+
+Optional (for richer semantic clustering):
+- `sentence-transformers` — Dense vector embeddings (falls back to n-gram similarity if absent)
 
 ## Quick Start
 
-```python
-from lopace import PromptCompressor, CompressionMethod
+### HPGCS (Recommended)
 
-# Initialize compressor
-compressor = PromptCompressor(model="cl100k_base", zstd_level=15)
+\`\`\`python
+from lopace import HPGCS
 
-# Your prompt
-prompt = "You are a helpful AI assistant..."
-
-# Compress using hybrid method (recommended)
-compressed = compressor.compress(prompt, CompressionMethod.HYBRID)
-
-# Decompress back to original
-original = compressor.decompress(compressed, CompressionMethod.HYBRID)
-
-# Verify losslessness
-assert original == prompt  # ✓ True
-```
-
-## Usage Examples
-
-### Basic Compression/Decompression
-
-```python
-from lopace import PromptCompressor, CompressionMethod
-
-compressor = PromptCompressor()
-
-# Compress and return both original and compressed
-original, compressed = compressor.compress_and_return_both(
-    "Your prompt here",
-    CompressionMethod.HYBRID
+# Initialize the full pipeline (defaults to in-memory SQLite)
+hpgcs = HPGCS(
+    db_path=":memory:",          # or a file path for persistence
+    tokenizer_model="cl100k_base",
+    zstd_level=15,
+    cluster_threshold=0.80,
+    sentence_transformer=None,   # set to a model name to enable dense embeddings
 )
 
-# Decompress
-recovered = compressor.decompress(compressed, CompressionMethod.HYBRID)
-```
+prompt = "System: You are a helpful assistant.\nUser: What is entropy?"
 
-### Using Different Methods
+# Compress — returns a metrics dict and stores the prompt internally
+result = hpgcs.compress(prompt)
+print(result["prompt_id"])            # e.g. "A3F1B2C4"
+print(result["compression_ratio"])    # e.g. 3.2
+print(result["space_savings_pct"])    # e.g. 68.5
 
-```python
-compressor = PromptCompressor()
+# Reconstruct from the database
+text, verification = hpgcs.reconstruct(result["prompt_id"])
+assert verification["exact_match"]    # ✓ True
+assert text == prompt                 # ✓ True
+\`\`\`
 
-prompt = "Your system prompt here..."
+### One-Shot Compress and Reconstruct
 
-# Method 1: Zstd only
-zstd_compressed = compressor.compress_zstd(prompt)
-zstd_decompressed = compressor.decompress_zstd(zstd_compressed)
+\`\`\`python
+result = hpgcs.compress_and_reconstruct(prompt)
+print(result["exact_match"])          # True
+print(result["hash_match"])           # True
+print(result["reconstructed_text"])   # identical to original
+\`\`\`
 
-# Method 2: Token-based (BPE)
-token_compressed = compressor.compress_token(prompt)
-token_decompressed = compressor.decompress_token(token_compressed)
+### Batch Compression
 
-# Method 3: Hybrid (recommended - best compression)
-hybrid_compressed = compressor.compress_hybrid(prompt)
-hybrid_decompressed = compressor.decompress_hybrid(hybrid_compressed)
-```
+\`\`\`python
+prompts = ["Prompt one...", "Prompt two...", "Prompt three..."]
+results = hpgcs.compress_batch(prompts)
+for r in results:
+    print(r["prompt_id"], r["space_savings_pct"])
+\`\`\`
 
-### Get Compression Statistics
+### Database Analytics
 
-```python
-compressor = PromptCompressor()
-prompt = "Your long system prompt..."
+\`\`\`python
+stats = hpgcs.database_stats()
+print(stats["total_prompts"])
+print(stats["unique_nodes"])
+print(stats["num_clusters"])
+print(stats["avg_compression_ratio"])
 
-# Get stats for all methods
-stats = compressor.get_compression_stats(prompt)
+# List all stored prompts
+for row in hpgcs.list_prompts():
+    print(row["prompt_id"], row["compressed_size"])
 
-print(f"Original Size: {stats['original_size_bytes']} bytes")
-print(f"Original Tokens: {stats['original_size_tokens']}")
+# Inspect reusable nodes / clusters
+nodes    = hpgcs.list_nodes()
+clusters = hpgcs.list_clusters()
+\`\`\`
 
-for method, method_stats in stats['methods'].items():
-    print(f"\n{method}:")
-    print(f"  Compressed: {method_stats['compressed_size_bytes']} bytes")
-    print(f"  Space Saved: {method_stats['space_saved_percent']:.2f}%")
-```
+## HPGCS API Reference
 
-## Compression Methods Explained
+### `HPGCS`
 
-### 1. Zstd Compression
-
-Uses Zstandard's dictionary-based algorithm to find repeated patterns and replace them with shorter references.
-
-**Best for**: General text compression, when tokenization overhead is not needed.
-
-```python
-compressed = compressor.compress_zstd(prompt)
-original = compressor.decompress_zstd(compressed)
-```
-
-### 2. Token-Based Compression
-
-Uses Byte-Pair Encoding (BPE) to convert text to token IDs, then packs them as binary data.
-
-**Best for**: When you need token IDs anyway, or when working with LLM tokenizers.
-
-```python
-compressed = compressor.compress_token(prompt)
-original = compressor.decompress_token(compressed)
-```
-
-### 3. Hybrid Compression (Recommended)
-
-Combines tokenization and Zstd compression for maximum efficiency:
-
-1. Tokenizes text to reduce redundancy
-2. Packs tokens as binary (2 bytes per token)
-3. Applies Zstd compression on the binary data
-
-**Best for**: Database storage where maximum compression is needed.
-
-```python
-compressed = compressor.compress_hybrid(prompt)
-original = compressor.decompress_hybrid(compressed)
-```
-
-## API Reference
-
-### `PromptCompressor`
-
-Main compressor class.
+Main orchestrator that combines all nine modules.
 
 #### Constructor
 
-```python
-PromptCompressor(
-    model: str = "cl100k_base",
-    zstd_level: int = 15
+\`\`\`python
+HPGCS(
+    db_path: str = ":memory:",
+    tokenizer_model: str = "cl100k_base",
+    zstd_level: int = 15,
+    cluster_threshold: float = 0.80,
+    sentence_transformer: Optional[str] = None,
 )
-```
+\`\`\`
 
-**Parameters:**
-- `model`: Tokenizer model name (default: `"cl100k_base"`)
-  - Options: `"cl100k_base"`, `"p50k_base"`, `"r50k_base"`, `"gpt2"`, etc.
-- `zstd_level`: Zstd compression level 1-22 (default: `15`)
-  - Higher = better compression but slower
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `db_path` | `str` | `":memory:"` | SQLite path; use `":memory:"` for ephemeral storage |
+| `tokenizer_model` | `str` | `"cl100k_base"` | tiktoken encoding name |
+| `zstd_level` | `int` | `15` | Zstandard level 1–22 (higher = better ratio, slower) |
+| `cluster_threshold` | `float` | `0.80` | Cosine similarity threshold for cluster assignment |
+| `sentence_transformer` | `str | None` | `None` | Embedding model name; `None` uses n-gram fallback |
 
 #### Methods
 
-##### `compress(text: str, method: CompressionMethod) -> bytes`
+##### `compress(text, prompt_id=None) -> dict`
 
-Compress a prompt using the specified method.
+Run the full compression pipeline on a single prompt. Returns a metrics dict:
 
-##### `decompress(compressed_data: bytes, method: CompressionMethod) -> str`
+\`\`\`python
+{
+    "prompt_id":             str,    # stable ID for later retrieval
+    "original_size_bytes":   int,
+    "compressed_size_bytes": int,
+    "compression_ratio":     float,  # original / compressed
+    "space_savings_pct":     float,  # 0–100
+    "compression_time_s":    float,
+    "graph_path":            str,    # human-readable node path
+    "node_count":            int,
+    "cluster_id":            str,
+    "cluster_similarity":    float,
+    "token_count":           int,
+    "packed_size_bytes":     int,
+    "components":            list,   # [(type, content), ...]
+    "has_structure":         bool,
+}
+\`\`\`
 
-Decompress a compressed prompt.
+##### `reconstruct(prompt_id) -> Tuple[str, dict]`
 
-##### `compress_and_return_both(text: str, method: CompressionMethod) -> Tuple[str, bytes]`
+Load and reconstruct a compressed prompt. Returns `(text, verification)` where `verification` contains `exact_match`, `hash_match`, `original_hash`, `rebuilt_hash`, and timing info.
 
-Compress and return both original and compressed versions.
+##### `compress_and_reconstruct(text) -> dict`
 
-##### `get_compression_stats(text: str, method: Optional[CompressionMethod]) -> dict`
+Compress a prompt and immediately reconstruct it, returning all metrics from both stages in a single dict.
 
-Get detailed compression statistics for analysis.
+##### `compress_batch(texts) -> List[dict]`
 
-### `CompressionMethod`
+Compress a list of prompts sequentially; returns a list of per-prompt metrics dicts.
 
-Enumeration of available compression methods:
+##### `database_stats() -> dict`
 
-- `CompressionMethod.ZSTD` - Zstandard compression
-- `CompressionMethod.TOKEN` - Token-based compression
-- `CompressionMethod.HYBRID` - Hybrid compression (recommended)
+Return aggregate statistics: total prompts, unique nodes, cluster count, average compression ratio, and per-graph and per-cluster summaries.
+
+##### `list_prompts() -> List[dict]`
+
+Return summary rows for every stored prompt.
+
+##### `list_nodes() -> List[dict]`
+
+Return all reusable nodes persisted in the database.
+
+##### `list_clusters() -> List[dict]`
+
+Return all cluster records from the database.
+
+##### `clear()`
+
+Reset the entire system — drops all in-memory state and re-initializes the database.
+
+---
+
+## Legacy API: `PromptCompressor`
+
+For simpler use cases that do not require graph storage or semantic clustering, the original `PromptCompressor` class is still available:
+
+\`\`\`python
+from lopace import PromptCompressor, CompressionMethod
+
+compressor = PromptCompressor(model="cl100k_base", zstd_level=15)
+
+prompt = "You are a helpful AI assistant..."
+
+# Zstd only
+compressed = compressor.compress(prompt, CompressionMethod.ZSTD)
+original   = compressor.decompress(compressed, CompressionMethod.ZSTD)
+
+# Token-based (BPE)
+compressed = compressor.compress(prompt, CompressionMethod.TOKEN)
+original   = compressor.decompress(compressed, CompressionMethod.TOKEN)
+
+# Hybrid — combines Token + Zstd (highest ratio)
+compressed = compressor.compress(prompt, CompressionMethod.HYBRID)
+original   = compressor.decompress(compressed, CompressionMethod.HYBRID)
+
+# Statistics
+stats = compressor.get_compression_stats(prompt)
+for method, s in stats["methods"].items():
+    print(f"{method}: {s['space_saved_percent']:.1f}% saved")
+\`\`\`
+
+### `PromptCompressor` Methods
+
+| Method | Description |
+|--------|-------------|
+| `compress(text, method)` | Compress using the specified `CompressionMethod` |
+| `decompress(data, method)` | Decompress bytes back to original string |
+| `compress_zstd(text)` | Zstandard-only compression |
+| `decompress_zstd(data)` | Zstandard decompression |
+| `compress_token(text)` | BPE tokenization + binary packing |
+| `decompress_token(data)` | Token-based decompression |
+| `compress_hybrid(text)` | Token + Zstd (best ratio) |
+| `decompress_hybrid(data)` | Hybrid decompression |
+| `compress_and_return_both(text, method)` | Returns `(original, compressed)` |
+| `get_compression_stats(text, method=None)` | Per-method stats dict |
+| `calculate_shannon_entropy(text, unit)` | Shannon entropy in bits |
+| `get_theoretical_compression_limit(text)` | Theoretical minimum size via entropy |
+
+### `CompressionMethod` Enum
+
+\`\`\`python
+CompressionMethod.ZSTD    # Zstandard dictionary compression
+CompressionMethod.TOKEN   # BPE tokenization + binary packing
+CompressionMethod.HYBRID  # TOKEN + ZSTD (recommended for databases)
+\`\`\`
+
+---
 
 ## How It Works
 
-### Compression Pipeline (Hybrid Method)
+### Module Details
 
-![Compression Pipeline](https://raw.githubusercontent.com/connectaman/LoPace/main/screenshots/compression-pipeline.png)
+#### Module 1 — `PromptParser`
 
-### Why Hybrid is Best for Databases
+Rule-based segmentation using keyword delimiters (`System:`, `User:`, `Instruction:`, `Context:`, `Tool:`, `Assistant:`, `Human:`, `Question:`, `Answer:`). Falls back to a single `unstructured` component if no delimiters are detected.
 
-1. **Searchability**: Token IDs can be searched without full decompression
-2. **Consistency**: Fixed tokenizer ensures stable compression ratios
-3. **Efficiency**: Maximum space savings for millions of prompts
+#### Modules 2 & 3 — `PromptGraphDecomposer` + `ReusableNodeManager`
 
-## Example Output
+Converts parsed components into a directed `PromptGraph` where each node represents a structural element. `ReusableNodeManager` deduplicates nodes across all processed prompts using content hashing, enabling cross-prompt storage savings.
 
-```python
-# Original prompt: 500 bytes
-# After compression:
-#   Zstd: 180 bytes (64% space saved)
-#   Token: 240 bytes (52% space saved)
-#   Hybrid: 120 bytes (76% space saved) ← Best!
-```
+#### Module 4 — `VectorSimilarityClusterer`
+
+Assigns each prompt to a semantic cluster using cosine similarity. Uses `sentence-transformers` dense embeddings when available; otherwise falls back to TF-IDF-style n-gram similarity. Threshold is configurable (default `0.80`).
+
+#### Module 5 — `ResidualTextTokenizer`
+
+BPE tokenization via tiktoken. Packs token IDs as `uint16` (2 bytes/token) for IDs ≤ 65 535, or `uint32` (4 bytes/token) otherwise.
+
+#### Module 6 — `LearnedCompressionEncoder`
+
+Applies Zstandard (LZ77 + FSE/Huffman) entropy coding to the binary token payload. Stores a compact latent representation alongside the compressed blob.
+
+#### Module 7 — `GraphStorageDatabase`
+
+SQLite-backed persistence layer with three tables: `prompts`, `nodes`, and `clusters`. Supports insert, upsert, and bulk retrieval operations.
+
+#### Module 8 — `PromptReconstructionEngine`
+
+Reverses the pipeline: decompresses → decodes token IDs → reconstructs text → verifies via SHA-256 hash comparison and character-level exact match.
+
+### Compression Techniques
+
+1. **LZ77 (Sliding Window)** — used internally by Zstandard to find repeated byte sequences and replace them with back-references.
+2. **FSE / Huffman Coding** — Zstandard's Finite State Entropy assigns shorter codes to more-frequent symbols.
+3. **BPE Tokenization** — tiktoken reduces the vocabulary before entropy coding, improving downstream compression.
+
+### Shannon Entropy (Theoretical Limit)
+
+$$H(X) = -\sum_{i=1}^{n} P(x_i) \log_2 P(x_i)$$
+
+\`\`\`python
+compressor = PromptCompressor()
+entropy = compressor.calculate_shannon_entropy("Your prompt")
+limits  = compressor.get_theoretical_compression_limit("Your prompt")
+print(f"Theoretical minimum: {limits['theoretical_min_bytes']:.2f} bytes")
+print(f"Theoretical space savings: {limits['theoretical_space_savings_percent']:.1f}%")
+\`\`\`
+
+---
 
 ## Benchmarks & Performance Analysis
 
-Comprehensive benchmarks were conducted on 10 diverse prompts across three size categories (small, medium, and large) to evaluate LoPace's compression performance. The following visualizations present detailed analysis of compression metrics, storage efficiency, speed, and memory usage.
+Benchmarks conducted on 10 diverse prompts (small, medium, large categories).
 
-### Compression Ratio Analysis
+### Key Findings
 
-![Compression Ratio](https://raw.githubusercontent.com/connectaman/LoPace/main/screenshots/compression_ratio.svg)
+| Metric | Value |
+|--------|-------|
+| Average space savings (Hybrid) | 70–80% |
+| Compression throughput | 50–200 MB/s |
+| Decompression throughput | 100–500 MB/s |
+| Memory footprint (typical) | < 10 MB |
+| Reconstruction fidelity | 100% (lossless) |
 
-**Key Insights:**
-- **Hybrid method consistently achieves the highest compression ratios** across all prompt sizes
-- Compression effectiveness increases with prompt size, with large prompts showing 4-6x compression ratios
-- Box plots show the distribution of compression ratios, demonstrating consistent performance
-- Token-based compression provides moderate compression, while Zstd alone offers good baseline performance
+- Compression effectiveness increases with prompt size (larger patterns → better ratios)
+- All methods verified lossless across all test cases
+- Performance scales sub-linearly with prompt size
 
-### Space Savings Performance
-
-![Space Savings](https://raw.githubusercontent.com/connectaman/LoPace/main/screenshots/space_savings.svg)
-
-**Key Insights:**
-- **Hybrid method achieves 70-80% space savings** on average across all prompt categories
-- Space savings improve significantly with larger prompts (up to 85% for very large prompts)
-- Error bars indicate consistent performance with low variance
-- All three methods show substantial space reduction compared to uncompressed storage
-
-### Disk Size Comparison
-
-![Disk Size Comparison](https://raw.githubusercontent.com/connectaman/LoPace/main/screenshots/disk_size_comparison.svg)
-
-**Key Insights:**
-- **Dramatic reduction in storage requirements** - compressed data is 3-6x smaller than original
-- Log-scale visualization shows the magnitude of space savings across different prompt sizes
-- Hybrid method provides the best storage efficiency, especially for large prompts
-- Size reduction percentage increases linearly with prompt complexity
-
-### Speed & Throughput Metrics
-
-![Speed Metrics](https://raw.githubusercontent.com/connectaman/LoPace/main/screenshots/speed_metrics.svg)
-![Speed Metrics](https://raw.githubusercontent.com/connectaman/LoPace/main/screenshots/original_vs_decompressed.svg)
-
-**Key Insights:**
-- **Compression speeds range from 50-200 MB/s** depending on method and prompt size
-- Decompression is consistently faster than compression (100-500 MB/s)
-- Hybrid method maintains excellent throughput despite additional processing steps
-- Processing time scales sub-linearly with prompt size, demonstrating efficient algorithms
-
-### Memory Usage Analysis
-
-![Memory Usage](https://raw.githubusercontent.com/connectaman/LoPace/main/screenshots/memory_usage.svg)
-
-**Key Insights:**
-- **Memory footprint is minimal** - typically under 10 MB even for large prompts
-- Memory usage scales gracefully with input size
-- Compression and decompression show similar memory requirements
-- All methods demonstrate efficient memory utilization suitable for production environments
-
-### Comprehensive Method Comparison
-
-![Comprehensive Comparison](https://raw.githubusercontent.com/connectaman/LoPace/main/screenshots/comprehensive_comparison.svg)
-
-**Key Insights:**
-- **Heatmaps provide at-a-glance comparison** of all metrics across methods and prompt sizes
-- Hybrid method consistently ranks highest in compression ratio and space savings
-- Throughput remains competitive across all methods
-- Memory usage is well-balanced, with no method showing excessive requirements
-
-### Scalability Analysis
-
-![Scalability Analysis](https://raw.githubusercontent.com/connectaman/LoPace/main/screenshots/scalability_analysis.svg)
-
-**Key Insights:**
-- **Performance scales efficiently** with prompt size across all metrics
-- Compression ratio improves with larger inputs (better pattern recognition)
-- Processing time increases sub-linearly, demonstrating algorithmic efficiency
-- Memory usage grows modestly, making LoPace suitable for very large prompts
-
-### Key Findings Summary
-
-1. **Hybrid method is optimal** for maximum compression (70-80% space savings)
-2. **All methods are lossless** - 100% fidelity verified across all test cases
-3. **Speed is production-ready** - 50-200 MB/s compression throughput
-4. **Memory efficient** - Under 10 MB for typical use cases
-5. **Scales excellently** - Performance improves with larger prompts
-
-## Running the Example
-
-```bash
-python example.py
-```
-
-This will demonstrate all compression methods and show statistics.
+---
 
 ## Interactive Web App (Streamlit)
 
-LoPace includes an interactive Streamlit web application with comprehensive evaluation metrics:
-
-### Features
-
-- **Interactive Interface**: Enter prompts and see real-time compression results
-- **Comprehensive Metrics**: All four industry-standard metrics:
-  - Compression Ratio (CR): $CR = \frac{S_{original}}{S_{compressed}}$
-  - Space Savings (SS): $SS = 1 - \frac{S_{compressed}}{S_{original}}$
-  - Bits Per Character (BPC): $BPC = \frac{Total Bits}{Total Characters}$
-  - Throughput (MB/s): $T = \frac{Data Size}{Time}$
-- **Lossless Verification**:
-  - SHA-256 Hash Verification
-  - Exact Match (Character-by-Character)
-  - Reconstruction Error: $E = \frac{1}{N} \sum_{i=1}^{N} \mathbb{1}(x_i \neq \hat{x}_i) = 0$
-- **Side-by-Side Comparison**: Compare all three compression methods
-- **Real-time Configuration**: Adjust tokenizer model and Zstd level
-
-### Running the Streamlit App
-
-```bash
+\`\`\`bash
 streamlit run streamlit_app.py
-```
+\`\`\`
 
-The app will open in your default web browser at `http://localhost:8501`
+Opens at `http://localhost:8501`. Features:
 
-### Screenshot Preview
+- Real-time compression of user-supplied prompts
+- All four industry-standard metrics:
+  - Compression Ratio: CR = S_original / S_compressed
+  - Space Savings: SS = 1 − S_compressed / S_original
+  - Bits Per Character: BPC = Total Bits / Total Characters
+  - Throughput: T = Data Size / Time
+- SHA-256 hash verification + exact-match check
+- Side-by-side method comparison
 
-The app features:
-- **Left Panel**: Text input area for entering prompts
-- **Right Panel**: Results with tabs for each compression method
-- **Metrics Dashboard**: Real-time calculation of all evaluation metrics
-- **Verification Section**: Hash matching and exact match verification
-- **Comparison Table**: Side-by-side comparison of all methods
+---
 
 ## Development
 
-### Setup Development Environment
+### Setup
 
-```bash
+\`\`\`bash
 git clone https://github.com/connectaman/LoPace.git
-cd lopace
+cd HPGCS_LoPace
 pip install -r requirements-dev.txt
-```
-
-### Versioning & Releasing
-
-LoPace uses [setuptools-scm](https://github.com/pypa/setuptools_scm) so the package version is **derived from Git tags** — no manual edits to `setup.py` or `pyproject.toml` are needed.
-
-**To release a new version:**
-
-1. Bump the version by creating and pushing a tag (e.g. `v0.1.5`):
-   ```bash
-   git tag v0.1.5
-   git push origin v0.1.5
-   ```
-2. CI builds the package with that version and publishes to PyPI.
-
-The version in `lopace.__version__` (and the built distribution) comes from the latest tag. Without a tag, you get a dev version like `0.1.5.dev3+gabc1234`.
-
-**Will the next push to `main` build 0.1.4?** No. If the latest tag is `v0.1.4` and you push new commits to `main` without a new tag, setuptools-scm produces a **development version** (e.g. `0.1.5.dev3`), not `0.1.4`. To release `0.1.5`, create and push the tag `v0.1.5`; CI will then build and publish that version to PyPI.
+\`\`\`
 
 ### Running Tests
 
-```bash
+\`\`\`bash
 pytest
-```
+\`\`\`
 
-### CI/CD Pipeline
+### Versioning & Releasing
 
-This project uses GitHub Actions for automated testing and publishing:
+Version is derived from Git tags via `setuptools-scm` — no manual edits needed.
 
-- **Tests run automatically** on every push and pull request
-- **Publishing to PyPI** happens automatically when:
-  - All tests pass ✅
-  - Push is to `main`/`master` branch or a version tag (e.g., `v0.1.0`)
+\`\`\`bash
+git tag v0.2.0
+git push origin v0.2.0
+\`\`\`
 
-See [.github/workflows/README.md](.github/workflows/README.md) for detailed setup instructions.
+CI will build and publish the tagged version to PyPI automatically.
+
+---
 
 ## Mathematical Background
 
-### Compression Techniques Used
+### Compression Ratio
 
-LoPace uses the following compression techniques:
+$$CR = \frac{S_{\text{original}}}{S_{\text{compressed}}}$$
 
-![Compression techniques](https://raw.githubusercontent.com/connectaman/LoPace/main/screenshots/lopace-compression-technique.png)
+### Space Savings
 
-1. **LZ77 (Sliding Window)**: Used **indirectly** through Zstandard
-   - Zstandard internally uses LZ77-style algorithms to find repeated patterns
-   - Instead of storing "assistant" again, it stores a tuple: (distance_back, length)
-   - We use this by calling `zstandard.compress()` - the LZ77 is handled internally
+$$SS = \left(1 - \frac{S_{\text{compressed}}}{S_{\text{original}}}\right) \times 100$$
 
-2. **Huffman Coding / FSE (Finite State Entropy)**: Used **indirectly** through Zstandard
-   - Zstandard uses FSE, a variant of Huffman coding
-   - Assigns shorter binary codes to characters/patterns that appear most frequently
-   - Again, handled internally by the zstandard library
+### Reconstruction Error
 
-3. **BPE Tokenization**: Used **directly** via tiktoken
-   - Byte-Pair Encoding converts text to token IDs
-   - Reduces vocabulary size before compression
-   - Implemented by OpenAI's tiktoken library
+$$E = \frac{1}{N} \sum_{i=1}^{N} \mathbb{1}(x_i \neq \hat{x}_i) = 0$$
 
-### Shannon Entropy
+All methods guarantee zero reconstruction error.
 
-The theoretical compression limit is determined by Shannon Entropy:
-
-$H(X) = -\sum_{i=1}^{n} P(x_i) \log_2 P(x_i)$
-
-Where:
-- $H(X)$ is the entropy of the source
-- $P(x_i)$ is the probability of character/pattern $x_i$
-
-LoPace **calculates** Shannon Entropy to show theoretical compression limits:
-
-```python
-compressor = PromptCompressor()
-entropy = compressor.calculate_shannon_entropy("Your prompt")
-limits = compressor.get_theoretical_compression_limit("Your prompt")
-print(f"Theoretical minimum: {limits['theoretical_min_bytes']:.2f} bytes")
-```
-
-This allows you to compare actual compression against the theoretical limit.
+---
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) file for details.
+MIT License — see [LICENSE](LICENSE) for details.
 
 ## Contributing
 
-Contributions are welcome! We appreciate your help in making LoPace better.
-
-Please read our [Contributing Guidelines](CONTRIBUTING.md) and [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
-
-### Quick Start for Contributors
+Please read [CONTRIBUTING.md](CONTRIBUTING.md) and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) before contributing.
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Make your changes
-4. Run tests (`pytest tests/ -v`)
-5. Commit your changes (`git commit -m 'Add amazing feature'`)
-6. Push to the branch (`git push origin feature/amazing-feature`)
-7. Open a Pull Request
-
-For more details, see [CONTRIBUTING.md](CONTRIBUTING.md).
+3. Run tests (`pytest tests/ -v`)
+4. Open a Pull Request
 
 ## Author
 
@@ -499,5 +470,6 @@ Aman Ulla
 
 ## Acknowledgments
 
-- Built on top of [zstandard](https://github.com/facebook/zstd) and [tiktoken](https://github.com/openai/tiktoken)
-- Inspired by the need for efficient prompt storage in LLM applications
+- Built on [zstandard](https://github.com/facebook/zstd) and [tiktoken](https://github.com/openai/tiktoken)
+- Optional semantic clustering via [sentence-transformers](https://www.sbert.net/)
+- Inspired by the need for efficient prompt storage in production LLM applications
