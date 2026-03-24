@@ -1,0 +1,221 @@
+{
+  "experiments": [
+    {
+      "experiment": "Real: eval_results",
+      "metadata": {
+        "n_prompts": 5000,
+        "source_file": "datasets/eval_results.json",
+        "file_size_bytes": 672837942,
+        "mean_prompt_chars": 6605.8476,
+        "median_prompt_chars": 7308,
+        "min_prompt_chars": 18,
+        "max_prompt_chars": 93275,
+        "total_chars": 33029238,
+        "unique_prompts": 4950,
+        "exact_duplicate_pct": 1.0000000000000009,
+        "json_field_used": "auto-detected",
+        "dataset_type": "real"
+      },
+      "methods": {
+        "zstd": {
+          "method": "per_prompt_zstd",
+          "total_original": 33095761,
+          "total_compressed": 10280176,
+          "ratio": 3.2193768861544783,
+          "savings_pct": 68.93808847604382,
+          "time_s": 3.282831907272339
+        },
+        "hybrid": {
+          "method": "per_prompt_hybrid",
+          "total_original": 33095761,
+          "total_compressed": 9199476,
+          "ratio": 3.5975702311740365,
+          "savings_pct": 72.20346134358415,
+          "time_s": 79.5856146812439
+        },
+        "zstd_dict": {
+          "method": "zstd_dictionary",
+          "total_original": 33095761,
+          "total_compressed": 8171808,
+          "total_with_dict_overhead": 8302880,
+          "dictionary_size": 131072,
+          "ratio_without_dict": 4.049992486362871,
+          "ratio_with_dict": 3.9860579702464687,
+          "savings_pct": 74.91255753267012,
+          "train_samples": 500,
+          "time_s": 4.486421585083008
+        },
+        "corpus_dedup": {
+          "method": "corpus_dedup",
+          "total_original": 33095761,
+          "total_compressed": 14707543,
+          "ratio": 2.250257639906271,
+          "savings_pct": 55.56064415621083,
+          "unique_nodes": 19230,
+          "avg_reuse": 1.0214248569942799,
+          "time_s": 3.368795871734619
+        },
+        "corpus_dedup_chunked": {
+          "method": "corpus_dedup_chunked",
+          "total_original": 33095761,
+          "total_compressed": 16031462,
+          "ratio": 2.0644256275566133,
+          "savings_pct": 51.5603765690718,
+          "unique_nodes": 26056,
+          "avg_reuse": 1.0277863064169481,
+          "chunk_config": {
+            "min": 128,
+            "max": 2048
+          },
+          "time_s": 3.6555774211883545
+        }
+      }
+    }
+  ],
+  "scaling": [
+    {
+      "n": 1,
+      "orig": 9777,
+      "dedup_stored": 4747,
+      "dedup_ratio": 2.059616599957868,
+      "zstd_stored": 3280,
+      "zstd_ratio": 2.9807926829268294,
+      "unique_nodes": 6,
+      "avg_reuse": 1.0,
+      "dict_stored": 133464,
+      "dict_ratio": 0.0732557094047833
+    },
+    {
+      "n": 2,
+      "orig": 10282,
+      "dedup_stored": 5107,
+      "dedup_ratio": 2.0133150577638537,
+      "zstd_stored": 3539,
+      "zstd_ratio": 2.9053404916643117,
+      "unique_nodes": 7,
+      "avg_reuse": 1.0,
+      "dict_stored": 133627,
+      "dict_ratio": 0.07694552747573469
+    },
+    {
+      "n": 5,
+      "orig": 33236,
+      "dedup_stored": 15702,
+      "dedup_ratio": 2.1166730352821297,
+      "zstd_stored": 8806,
+      "zstd_ratio": 3.7742448330683627,
+      "unique_nodes": 18,
+      "avg_reuse": 1.0,
+      "dict_stored": 137160,
+      "dict_ratio": 0.24231554389034704
+    },
+    {
+      "n": 10,
+      "orig": 60441,
+      "dedup_stored": 28451,
+      "dedup_ratio": 2.1243893009033075,
+      "zstd_stored": 17327,
+      "zstd_ratio": 3.4882553240607144,
+      "unique_nodes": 35,
+      "avg_reuse": 1.0,
+      "dict_stored": 143507,
+      "dict_ratio": 0.42117109269931086
+    },
+    {
+      "n": 25,
+      "orig": 164894,
+      "dedup_stored": 77362,
+      "dedup_ratio": 2.131459889868411,
+      "zstd_stored": 50298,
+      "zstd_ratio": 3.27834108712076,
+      "unique_nodes": 110,
+      "avg_reuse": 1.0,
+      "dict_stored": 167087,
+      "dict_ratio": 0.9868751009952899
+    },
+    {
+      "n": 50,
+      "orig": 297079,
+      "dedup_stored": 139732,
+      "dedup_ratio": 2.1260627486903503,
+      "zstd_stored": 102503,
+      "zstd_ratio": 2.898246880579105,
+      "unique_nodes": 171,
+      "avg_reuse": 1.0,
+      "dict_stored": 205412,
+      "dict_ratio": 1.4462592253617121
+    },
+    {
+      "n": 100,
+      "orig": 584983,
+      "dedup_stored": 274398,
+      "dedup_ratio": 2.131877783365768,
+      "zstd_stored": 197482,
+      "zstd_ratio": 2.9622092140043144,
+      "unique_nodes": 360,
+      "avg_reuse": 1.025,
+      "dict_stored": 274474,
+      "dict_ratio": 2.1312874807814217
+    },
+    {
+      "n": 250,
+      "orig": 1584736,
+      "dedup_stored": 724607,
+      "dedup_ratio": 2.1870282787773236,
+      "zstd_stored": 524870,
+      "zstd_ratio": 3.0192923962123954,
+      "unique_nodes": 884,
+      "avg_reuse": 1.0147058823529411,
+      "dict_stored": 505396,
+      "dict_ratio": 3.1356322566858466
+    },
+    {
+      "n": 500,
+      "orig": 3275445,
+      "dedup_stored": 1492274,
+      "dedup_ratio": 2.1949353804998277,
+      "zstd_stored": 1053678,
+      "zstd_ratio": 3.108582508128669,
+      "unique_nodes": 1935,
+      "avg_reuse": 1.0165374677002583,
+      "dict_stored": 893459,
+      "dict_ratio": 3.66602720438207
+    },
+    {
+      "n": 1000,
+      "orig": 6784814,
+      "dedup_stored": 3053238,
+      "dedup_ratio": 2.2221700371867508,
+      "zstd_stored": 2160259,
+      "zstd_ratio": 3.140740994482606,
+      "unique_nodes": 3841,
+      "avg_reuse": 1.0088518614944024,
+      "dict_stored": 1800196,
+      "dict_ratio": 3.7689307164330996
+    },
+    {
+      "n": 2500,
+      "orig": 16867731,
+      "dedup_stored": 7509732,
+      "dedup_ratio": 2.246116239567537,
+      "zstd_stored": 5255977,
+      "zstd_ratio": 3.2092474909992945,
+      "unique_nodes": 9979,
+      "avg_reuse": 1.0255536626916524,
+      "dict_stored": 4285116,
+      "dict_ratio": 3.936353414936725
+    },
+    {
+      "n": 5000,
+      "orig": 33095761,
+      "dedup_stored": 14707543,
+      "dedup_ratio": 2.250257639906271,
+      "zstd_stored": 10280176,
+      "zstd_ratio": 3.2193768861544783,
+      "unique_nodes": 19230,
+      "avg_reuse": 1.0214248569942799,
+      "dict_stored": 8302880,
+      "dict_ratio": 3.9860579702464687
+    }
+  ]
+}

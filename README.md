@@ -15,6 +15,8 @@ A professional, open-source Python package for compressing and reconstructing pr
 [![🤗 Spaces](https://img.shields.io/badge/🤗%20Hugging%20Face-Spaces-blue)](https://huggingface.co/spaces/codewithaman/LoPace)
 [![arXiv](https://img.shields.io/badge/arXiv-Paper-b31b1b.svg)](https://arxiv.org/abs/2602.13266)
 
+📘 **Project updates & corpus-data methodology**: See [README_CORPUS_METHODOLOGY.md](README_CORPUS_METHODOLOGY.md)
+
 ## The Problem: Storage Challenges with Large Prompts
 
 When building LLM applications, storing prompts efficiently becomes a critical challenge, especially as you scale:
