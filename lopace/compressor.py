@@ -4,12 +4,21 @@ Main compression module implementing Zstd, Token-based, and Hybrid compression m
 The compression algorithms used:
 - Zstd: Uses LZ77 (sliding window) and FSE (Finite State Entropy, a variant of Huffman coding)
   internally via the zstandard library
+- LZ4: Uses fast block/frame compression via python-lz4
+- Brotli: High-ratio compression for text-heavy payloads
+- Snappy: Very fast compression/decompression for low-latency workflows
+- Gzip: DEFLATE wrapped in gzip container format
+- Deflate: Raw zlib/DEFLATE compression
+- LZMA: High-ratio compression suitable for archival storage
 - Token-based: Uses BPE (Byte-Pair Encoding) via tiktoken
 - Hybrid: Combines tokenization + Zstd compression
 """
 
 import struct
 import math
+import gzip
+import zlib
+import lzma
 from collections import Counter
 from enum import Enum
 from typing import Union, Tuple, Optional, Dict
@@ -24,10 +33,31 @@ try:
 except ImportError:
     tiktoken = None
 
+try:
+    import lz4.frame as lz4f
+except ImportError:
+    lz4f = None
+
+try:
+    import brotli
+except ImportError:
+    brotli = None
+
+try:
+    import snappy
+except ImportError:
+    snappy = None
+
 
 class CompressionMethod(Enum):
     """Compression methods available."""
     ZSTD = "zstd"
+    LZ4 = "lz4"
+    BROTLI = "brotli"
+    SNAPPY = "snappy"
+    GZIP = "gzip"
+    DEFLATE = "deflate"
+    LZMA = "lzma"
     TOKEN = "token"
     HYBRID = "hybrid"
 
@@ -38,6 +68,12 @@ class PromptCompressor:
     
     Methods:
         - Zstd: Dictionary-based compression using Zstandard
+        - LZ4: Fast dictionary/frame compression using LZ4
+        - Brotli: High-ratio text compression
+        - Snappy: Fast low-latency compression
+        - Gzip: DEFLATE in gzip frame format
+        - Deflate: zlib/DEFLATE byte compression
+        - LZMA: High-ratio compression for archival scenarios
         - Token: Byte-Pair Encoding (BPE) tokenization with binary packing
         - Hybrid: Combination of tokenization and Zstd compression
     
@@ -70,6 +106,46 @@ class PromptCompressor:
         # Validate zstd_level
         if not (1 <= zstd_level <= 22):
             raise ValueError("zstd_level must be between 1 and 22")
+
+        self.has_lz4 = lz4f is not None
+        self.has_brotli = brotli is not None
+        self.has_snappy = snappy is not None
+
+    def available_methods(self):
+        """Return compression methods supported in the current environment."""
+        methods = [CompressionMethod.ZSTD]
+        if self.has_lz4:
+            methods.append(CompressionMethod.LZ4)
+        if self.has_brotli:
+            methods.append(CompressionMethod.BROTLI)
+        if self.has_snappy:
+            methods.append(CompressionMethod.SNAPPY)
+        methods.extend([
+            CompressionMethod.GZIP,
+            CompressionMethod.DEFLATE,
+            CompressionMethod.LZMA,
+            CompressionMethod.TOKEN,
+            CompressionMethod.HYBRID,
+        ])
+        return tuple(methods)
+
+    def _require_lz4(self):
+        if not self.has_lz4:
+            raise ImportError("lz4 is required for LZ4 method. Install it with: pip install lz4")
+
+    def _require_brotli(self):
+        if not self.has_brotli:
+            raise ImportError("brotli is required for BROTLI method. Install it with: pip install brotli")
+
+    def _require_snappy(self):
+        if not self.has_snappy:
+            raise ImportError("python-snappy is required for SNAPPY method. Install it with: pip install python-snappy")
+
+    def _level_9(self) -> int:
+        return max(1, min(9, round(self.zstd_level * 9 / 22)))
+
+    def _brotli_quality(self) -> int:
+        return max(0, min(11, round(self.zstd_level * 11 / 22)))
     
     def compress_zstd(self, text: str) -> bytes:
         """
@@ -101,6 +177,89 @@ class PromptCompressor:
             Original prompt string
         """
         raw_bytes = zstd.decompress(compressed_blob)
+        return raw_bytes.decode('utf-8')
+
+    def compress_lz4(self, text: str) -> bytes:
+        """
+        Compress prompt using LZ4 frame compression.
+
+        Args:
+            text: Original prompt string
+
+        Returns:
+            Compressed bytes
+        """
+        self._require_lz4()
+        data_bytes = text.encode('utf-8')
+        return lz4f.compress(data_bytes)
+
+    def decompress_lz4(self, compressed_blob: bytes) -> str:
+        """
+        Decompress LZ4-compressed prompt.
+
+        Args:
+            compressed_blob: Compressed bytes from compress_lz4()
+
+        Returns:
+            Original prompt string
+        """
+        self._require_lz4()
+        raw_bytes = lz4f.decompress(compressed_blob)
+        return raw_bytes.decode('utf-8')
+
+    def compress_brotli(self, text: str) -> bytes:
+        """Compress prompt using Brotli."""
+        self._require_brotli()
+        data_bytes = text.encode('utf-8')
+        return brotli.compress(data_bytes, quality=self._brotli_quality())
+
+    def decompress_brotli(self, compressed_blob: bytes) -> str:
+        """Decompress Brotli-compressed prompt."""
+        self._require_brotli()
+        raw_bytes = brotli.decompress(compressed_blob)
+        return raw_bytes.decode('utf-8')
+
+    def compress_snappy(self, text: str) -> bytes:
+        """Compress prompt using Snappy."""
+        self._require_snappy()
+        data_bytes = text.encode('utf-8')
+        return snappy.compress(data_bytes)
+
+    def decompress_snappy(self, compressed_blob: bytes) -> str:
+        """Decompress Snappy-compressed prompt."""
+        self._require_snappy()
+        raw_bytes = snappy.decompress(compressed_blob)
+        return raw_bytes.decode('utf-8')
+
+    def compress_gzip(self, text: str) -> bytes:
+        """Compress prompt using Gzip."""
+        data_bytes = text.encode('utf-8')
+        return gzip.compress(data_bytes, compresslevel=self._level_9())
+
+    def decompress_gzip(self, compressed_blob: bytes) -> str:
+        """Decompress Gzip-compressed prompt."""
+        raw_bytes = gzip.decompress(compressed_blob)
+        return raw_bytes.decode('utf-8')
+
+    def compress_deflate(self, text: str) -> bytes:
+        """Compress prompt using DEFLATE (zlib)."""
+        data_bytes = text.encode('utf-8')
+        return zlib.compress(data_bytes, level=self._level_9())
+
+    def decompress_deflate(self, compressed_blob: bytes) -> str:
+        """Decompress DEFLATE-compressed prompt."""
+        raw_bytes = zlib.decompress(compressed_blob)
+        return raw_bytes.decode('utf-8')
+
+    def compress_lzma(self, text: str) -> bytes:
+        """Compress prompt using LZMA."""
+        data_bytes = text.encode('utf-8')
+        preset = max(0, min(9, round(self.zstd_level * 9 / 22)))
+        return lzma.compress(data_bytes, preset=preset)
+
+    def decompress_lzma(self, compressed_blob: bytes) -> str:
+        """Decompress LZMA-compressed prompt."""
+        raw_bytes = lzma.decompress(compressed_blob)
         return raw_bytes.decode('utf-8')
     
     def compress_token(self, text: str) -> bytes:
@@ -318,6 +477,18 @@ class PromptCompressor:
         """
         if method == CompressionMethod.ZSTD:
             return self.compress_zstd(text)
+        elif method == CompressionMethod.LZ4:
+            return self.compress_lz4(text)
+        elif method == CompressionMethod.BROTLI:
+            return self.compress_brotli(text)
+        elif method == CompressionMethod.SNAPPY:
+            return self.compress_snappy(text)
+        elif method == CompressionMethod.GZIP:
+            return self.compress_gzip(text)
+        elif method == CompressionMethod.DEFLATE:
+            return self.compress_deflate(text)
+        elif method == CompressionMethod.LZMA:
+            return self.compress_lzma(text)
         elif method == CompressionMethod.TOKEN:
             return self.compress_token(text)
         elif method == CompressionMethod.HYBRID:
@@ -342,6 +513,18 @@ class PromptCompressor:
         """
         if method == CompressionMethod.ZSTD:
             return self.decompress_zstd(compressed_data)
+        elif method == CompressionMethod.LZ4:
+            return self.decompress_lz4(compressed_data)
+        elif method == CompressionMethod.BROTLI:
+            return self.decompress_brotli(compressed_data)
+        elif method == CompressionMethod.SNAPPY:
+            return self.decompress_snappy(compressed_data)
+        elif method == CompressionMethod.GZIP:
+            return self.decompress_gzip(compressed_data)
+        elif method == CompressionMethod.DEFLATE:
+            return self.decompress_deflate(compressed_data)
+        elif method == CompressionMethod.LZMA:
+            return self.decompress_lzma(compressed_data)
         elif method == CompressionMethod.TOKEN:
             return self.decompress_token(compressed_data)
         elif method == CompressionMethod.HYBRID:
@@ -386,11 +569,10 @@ class PromptCompressor:
         Returns:
             Dictionary with compression statistics
         """
-        methods = [method] if method else [
-            CompressionMethod.ZSTD,
-            CompressionMethod.TOKEN,
-            CompressionMethod.HYBRID
-        ]
+        methods = [method] if method else list(self.available_methods())
+
+        if method is not None and method not in self.available_methods():
+            raise ValueError(f"Compression method not available in this environment: {method}")
         
         original_size = len(text.encode('utf-8'))
         stats = {

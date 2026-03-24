@@ -13,7 +13,7 @@ Prompt Graph Decomposer
 Vector Similarity Clustering
      ↓  ResidualTextTokenizer
 Learned Compression Encoder
-     ↓  Zstandard Compression
+    ↓  Base Compression Backend
 Graph Storage Database
 
 Pipeline (decompression / reconstruction)
@@ -49,12 +49,14 @@ class HPGCS:
       • Reusable node deduplication
       • Semantic vector clustering
       • BPE residual tokenization
-      • Zstandard entropy compression
+            • Selectable base compression backend
 
     Args:
         db_path:              SQLite database path (":memory:" for in-memory).
         tokenizer_model:      tiktoken encoding name (default: "cl100k_base").
         zstd_level:           Zstandard compression level 1–22 (default: 15).
+        base_compressor:      Packed-token compressor backend for encoder
+                              (e.g. zstd, lz4, brotli, snappy, gzip, deflate, lzma).
         cluster_threshold:    Cosine similarity threshold for clustering (default: 0.80).
         sentence_transformer: Model name for semantic embeddings
                               (None = use n-gram fallback).
@@ -65,6 +67,7 @@ class HPGCS:
         db_path: str = ":memory:",
         tokenizer_model: str = "cl100k_base",
         zstd_level: int = 15,
+        base_compressor: str = "zstd",
         cluster_threshold: float = 0.80,
         sentence_transformer: Optional[str] = None,
     ):
@@ -85,8 +88,11 @@ class HPGCS:
         # Module 5 – Tokenizer
         self.tokenizer = ResidualTextTokenizer(model=tokenizer_model)
 
-        # Module 6 – Encoder + Zstd
-        self.encoder = LearnedCompressionEncoder(zstd_level=zstd_level)
+        # Module 6 – Encoder + selectable base compressor
+        self.encoder = LearnedCompressionEncoder(
+            zstd_level=zstd_level,
+            base_compressor=base_compressor,
+        )
 
         # Module 7 – Graph Storage Database
         self.db = GraphStorageDatabase(db_path=db_path)
@@ -101,6 +107,7 @@ class HPGCS:
             "db_path": db_path,
             "tokenizer_model": tokenizer_model,
             "zstd_level": zstd_level,
+            "base_compressor": base_compressor,
             "cluster_threshold": cluster_threshold,
             "clustering_backend": self.clusterer.backend,
         }
@@ -143,7 +150,7 @@ class HPGCS:
         token_ids = self.tokenizer.tokenize(text)
         packed_tokens = self.tokenizer.pack(token_ids)
 
-        # ── Stage 6 & 7: Encode + Zstd compress ──────────────────────────
+        # ── Stage 6 & 7: Encode + base compression ───────────────────────
         compressed_blob, latent_bytes = self.encoder.encode(packed_tokens, token_ids)
 
         compressed_size = len(compressed_blob)
@@ -187,6 +194,7 @@ class HPGCS:
             "cluster_similarity": cluster_sim,
             "token_count": len(token_ids),
             "packed_size_bytes": len(packed_tokens),
+            "base_compressor": self.encoder.base_compressor,
             "components": parsed.component_list(),
             "has_structure": parsed.has_structure,
         }

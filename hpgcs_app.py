@@ -10,6 +10,29 @@ from typing import Dict, List, Optional
 
 import streamlit as st
 
+
+LEGACY_METHOD_LABELS = {
+    "zstd": "Zstd only",
+    "lz4": "LZ4",
+    "brotli": "Brotli",
+    "snappy": "Snappy",
+    "gzip": "Gzip",
+    "deflate": "Deflate",
+    "lzma": "LZMA",
+    "token": "Token (BPE)",
+    "hybrid": "Hybrid (Token + Zstd)",
+}
+
+PIPELINE_COMPRESSOR_LABELS = {
+    "zstd": "Zstd",
+    "lz4": "LZ4",
+    "brotli": "Brotli",
+    "snappy": "Snappy",
+    "gzip": "Gzip",
+    "deflate": "Deflate",
+    "lzma": "LZMA",
+}
+
 st.set_page_config(
     page_title="HPGCS – Hybrid Prompt Graph Compression",
     page_icon="🧠",
@@ -64,6 +87,26 @@ with st.sidebar:
         "Zstd Compression Level", 1, 22, 15,
         help="Higher = better compression, slower speed",
     )
+
+    available_pipeline_compressors = []
+    try:
+        from lopace import LearnedCompressionEncoder
+        available_pipeline_compressors = LearnedCompressionEncoder.available_base_compressors()
+    except Exception:
+        available_pipeline_compressors = ["zstd", "gzip", "deflate", "lzma"]
+
+    default_pipeline_compressor_index = (
+        available_pipeline_compressors.index("zstd")
+        if "zstd" in available_pipeline_compressors
+        else 0
+    )
+    pipeline_base_compressor = st.selectbox(
+        "HPGCS Base Compressor",
+        options=available_pipeline_compressors,
+        index=default_pipeline_compressor_index,
+        format_func=lambda c: PIPELINE_COMPRESSOR_LABELS.get(c, c.upper()),
+        help="Compression backend used in HPGCS Stage 7 for packed token data",
+    )
     cluster_threshold = st.slider(
         "Cluster Similarity Threshold", 0.50, 0.99, 0.80, step=0.01,
         help="Minimum cosine similarity to join an existing cluster",
@@ -78,7 +121,7 @@ with st.sidebar:
 4. **Clusterer** — semantic grouping
 5. **Tokenizer** — BPE token IDs
 6. **Encoder** — latent representation
-7. **Zstd** — byte-level compression
+7. **Base Compressor** — byte-level compression
 8. **Database** — graph storage
 9. **Reconstructor** — exact rebuild
 """)
@@ -94,12 +137,13 @@ with st.sidebar:
 # ─── Cached instances ─────────────────────────────────────────────────────────
 
 @st.cache_resource
-def get_hpgcs(tok_model: str, zstd_lvl: int, thresh: float):
+def get_hpgcs(tok_model: str, zstd_lvl: int, thresh: float, base_compressor: str):
     from lopace import HPGCS
     return HPGCS(
         db_path=":memory:",
         tokenizer_model=tok_model,
         zstd_level=zstd_lvl,
+        base_compressor=base_compressor,
         cluster_threshold=thresh,
     )
 
@@ -110,7 +154,7 @@ def run_legacy(text: str, tok_model: str, zstd_lvl: int) -> dict:
     orig = len(text.encode())
     compressor = PromptCompressor(model=tok_model, zstd_level=zstd_lvl)
     out = {}
-    for method in CompressionMethod:
+    for method in compressor.available_methods():
         t0 = time.perf_counter()
         comp = compressor.compress(text, method)
         ct = time.perf_counter() - t0
@@ -128,6 +172,13 @@ def run_legacy(text: str, tok_model: str, zstd_lvl: int) -> dict:
             "exact_match": decomp == text,
         }
     return out
+
+
+@st.cache_data(max_entries=8)
+def get_available_legacy_methods(tok_model: str, zstd_lvl: int) -> List[str]:
+    from lopace import PromptCompressor
+    compressor = PromptCompressor(model=tok_model, zstd_level=zstd_lvl)
+    return [m.value for m in compressor.available_methods()]
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -208,7 +259,7 @@ with tab_pipeline:
             st.warning("Enter at least one prompt.")
             st.stop()
 
-        hpgcs = get_hpgcs(tokenizer_model, zstd_level, cluster_threshold)
+        hpgcs = get_hpgcs(tokenizer_model, zstd_level, cluster_threshold, pipeline_base_compressor)
         prog = st.progress(0, text="Compressing…")
         results = []
         for i, txt in enumerate(raw_prompts):
@@ -227,6 +278,10 @@ with tab_pipeline:
         c3.metric("Space Saved", f"{db['overall_space_savings_pct']:.1f}%")
         c4.metric("Unique Nodes", f"{db['unique_nodes']:,}")
         c5.metric("Clusters", f"{db['num_clusters']:,}")
+
+        st.caption(
+            f"HPGCS Stage-7 base compressor: **{PIPELINE_COMPRESSOR_LABELS.get(pipeline_base_compressor, pipeline_base_compressor.upper())}**"
+        )
 
         r1, r2, r3 = st.columns(3)
         r1.metric("Reused Nodes", f"{db.get('graph_reused_nodes', 0):,}")
@@ -422,8 +477,18 @@ with tab_pipeline:
 with tab_compare:
     st.markdown("### 📊 HPGCS vs Legacy Methods")
     st.caption(
-        "Compare the full HPGCS pipeline against Zstd-only, "
-        "Token-only, and Hybrid (Token+Zstd) methods."
+        "Compare the full HPGCS pipeline against selectable legacy "
+        "compression methods (including Zstd, LZ4, Brotli, Snappy, Gzip, Deflate, LZMA, Token, and Hybrid when available)."
+    )
+
+    available_legacy_methods = get_available_legacy_methods(tokenizer_model, zstd_level)
+    selected_legacy_methods = st.multiselect(
+        "Legacy methods to include",
+        options=available_legacy_methods,
+        default=available_legacy_methods,
+        format_func=lambda m: LEGACY_METHOD_LABELS.get(m, m.upper()),
+        help="Select which legacy methods to compare against HPGCS",
+        key="legacy_method_selector"
     )
 
     cmp_default = (
@@ -439,13 +504,13 @@ with tab_compare:
 
     if cmp_btn and cmp_input.strip():
         with st.spinner("Running all methods…"):
-            hpgcs_inst = get_hpgcs(tokenizer_model, zstd_level, cluster_threshold)
+            hpgcs_inst = get_hpgcs(tokenizer_model, zstd_level, cluster_threshold, pipeline_base_compressor)
             hres = hpgcs_inst.compress_and_reconstruct(cmp_input)
             legacy = run_legacy(cmp_input, tokenizer_model, zstd_level)
 
         orig = len(cmp_input.encode())
         rows = [
-            ("HPGCS (full pipeline)", {
+            (f"HPGCS (base: {PIPELINE_COMPRESSOR_LABELS.get(hres.get('base_compressor', pipeline_base_compressor), pipeline_base_compressor.upper())})", {
                 "original_size": orig,
                 "compressed_size":   hres["compressed_size_bytes"],
                 "compression_ratio": hres["compression_ratio"],
@@ -454,10 +519,12 @@ with tab_compare:
                 "decompress_time_ms": hres["decompression_time_s"] * 1000,
                 "exact_match": hres["exact_match"],
             }),
-            ("Zstd only",             legacy.get("zstd", {})),
-            ("Token (BPE)",            legacy.get("token", {})),
-            ("Hybrid (Token + Zstd)", legacy.get("hybrid", {})),
         ]
+        for method_key, data in legacy.items():
+            if method_key not in selected_legacy_methods:
+                continue
+            rows.append((LEGACY_METHOD_LABELS.get(method_key, method_key.upper()), data))
+
         table = [{
             "Method":          name,
             "Original (B)":    d.get("original_size", orig),
@@ -483,7 +550,7 @@ with tab_compare:
 
         try:
             import plotly.graph_objects as go
-            colours = ["#1565C0", "#546E7A", "#558B2F", "#6A1B9A"]
+            colours = ["#1565C0", "#546E7A", "#EF6C00", "#558B2F", "#6A1B9A"]
             names = [r["Method"] for r in table]
 
             ch1, ch2 = st.columns(2)
@@ -554,7 +621,7 @@ with tab_arch:
             "&nbsp;&nbsp;&nbsp;↓ <em>Module 6</em><br>"
             "<strong>Learned Compression Encoder</strong><br>"
             "&nbsp;&nbsp;&nbsp;↓ <em>Module 7</em><br>"
-            "<strong>Zstandard Compression</strong><br>"
+            "<strong>Base Compressor (Zstd/LZ4/Brotli/Snappy/Gzip/Deflate/LZMA)</strong><br>"
             "&nbsp;&nbsp;&nbsp;↓ <em>Module 8</em><br>"
             "<strong>Graph Storage Database</strong>"
             "</div>",

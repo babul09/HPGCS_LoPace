@@ -2,7 +2,7 @@
 Learned Compression Encoder - HPGCS Component 6
 
 Compresses packed token sequences into a latent representation and then
-applies Zstandard compression for final byte-level entropy reduction.
+applies a selectable base compressor for final byte-level entropy reduction.
 
 Prototype design
 ----------------
@@ -12,7 +12,7 @@ For this prototype a lightweight approach is used:
   1. Token IDs are packed into binary (done by ResidualTextTokenizer).
   2. A fixed hash-based embedding computes a 64-dim latent vector
      (used for analysis / visualisation only).
-  3. The **stored** compressed bytes are the Zstd-compressed packed tokens,
+    3. The **stored** compressed bytes are compressor-compressed packed tokens,
      which guarantees lossless reconstruction without a trained decoder.
 
 This satisfies the architecture specification ("a simplified encoder may
@@ -22,6 +22,9 @@ initially be used") while correctly demonstrating every pipeline stage.
 import hashlib
 import math
 import struct
+import gzip
+import zlib
+import lzma
 from typing import List, Tuple
 
 try:
@@ -30,6 +33,27 @@ try:
 except ImportError:
     zstd = None  # type: ignore
     _ZSTD_AVAILABLE = False
+
+try:
+    import lz4.frame as lz4f
+    _LZ4_AVAILABLE = True
+except ImportError:
+    lz4f = None  # type: ignore
+    _LZ4_AVAILABLE = False
+
+try:
+    import brotli
+    _BROTLI_AVAILABLE = True
+except ImportError:
+    brotli = None  # type: ignore
+    _BROTLI_AVAILABLE = False
+
+try:
+    import snappy
+    _SNAPPY_AVAILABLE = True
+except ImportError:
+    snappy = None  # type: ignore
+    _SNAPPY_AVAILABLE = False
 
 try:
     import numpy as np
@@ -101,19 +125,81 @@ class LearnedCompressionEncoder:
     """
     Prototype learned compression encoder.
 
-    Encodes packed token bytes into a Zstd-compressed blob.
+    Encodes packed token bytes into a compressor-compressed blob.
     Also produces a quantized latent vector for analysis.
 
     Args:
         zstd_level: Zstandard compression level (1–22, default 15).
+        base_compressor: Base backend for packed token compression.
     """
 
-    def __init__(self, zstd_level: int = 15):
-        if not _ZSTD_AVAILABLE:
-            raise ImportError("zstandard is required: pip install zstandard")
+    @staticmethod
+    def available_base_compressors() -> List[str]:
+        compressors = []
+        if _ZSTD_AVAILABLE:
+            compressors.append("zstd")
+        if _LZ4_AVAILABLE:
+            compressors.append("lz4")
+        if _BROTLI_AVAILABLE:
+            compressors.append("brotli")
+        if _SNAPPY_AVAILABLE:
+            compressors.append("snappy")
+        compressors.extend(["gzip", "deflate", "lzma"])
+        return compressors
+
+    def __init__(self, zstd_level: int = 15, base_compressor: str = "zstd"):
         if not (1 <= zstd_level <= 22):
             raise ValueError("zstd_level must be between 1 and 22")
+        self.base_compressor = base_compressor.lower().strip()
+        if self.base_compressor not in self.available_base_compressors():
+            raise ValueError(
+                f"Unsupported or unavailable base_compressor='{base_compressor}'. "
+                f"Available: {self.available_base_compressors()}"
+            )
         self.zstd_level = zstd_level
+
+    def _level_9(self) -> int:
+        return max(1, min(9, round(self.zstd_level * 9 / 22)))
+
+    def _brotli_quality(self) -> int:
+        return max(0, min(11, round(self.zstd_level * 11 / 22)))
+
+    def _compress_payload(self, packed_tokens: bytes) -> bytes:
+        backend = self.base_compressor
+        if backend == "zstd":
+            return zstd.compress(packed_tokens, level=self.zstd_level)
+        if backend == "lz4":
+            return lz4f.compress(packed_tokens)
+        if backend == "brotli":
+            return brotli.compress(packed_tokens, quality=self._brotli_quality())
+        if backend == "snappy":
+            return snappy.compress(packed_tokens)
+        if backend == "gzip":
+            return gzip.compress(packed_tokens, compresslevel=self._level_9())
+        if backend == "deflate":
+            return zlib.compress(packed_tokens, level=self._level_9())
+        if backend == "lzma":
+            preset = max(0, min(9, round(self.zstd_level * 9 / 22)))
+            return lzma.compress(packed_tokens, preset=preset)
+        raise ValueError(f"Unsupported compressor backend: {backend}")
+
+    def _decompress_payload(self, compressed_blob: bytes) -> bytes:
+        backend = self.base_compressor
+        if backend == "zstd":
+            return zstd.decompress(compressed_blob)
+        if backend == "lz4":
+            return lz4f.decompress(compressed_blob)
+        if backend == "brotli":
+            return brotli.decompress(compressed_blob)
+        if backend == "snappy":
+            return snappy.decompress(compressed_blob)
+        if backend == "gzip":
+            return gzip.decompress(compressed_blob)
+        if backend == "deflate":
+            return zlib.decompress(compressed_blob)
+        if backend == "lzma":
+            return lzma.decompress(compressed_blob)
+        raise ValueError(f"Unsupported compressor backend: {backend}")
 
     # ------------------------------------------------------------------
     def encode(
@@ -128,11 +214,11 @@ class LearnedCompressionEncoder:
 
         Returns:
             (compressed_blob, quantized_latent_bytes)
-            - compressed_blob: Zstd-compressed token data (used for storage).
+            - compressed_blob: Compressed token data (used for storage).
             - quantized_latent_bytes: Compact latent vector (for analysis).
         """
-        # Step 1: Zstd compress the packed token data
-        compressed_blob = zstd.compress(packed_tokens, level=self.zstd_level)
+        # Step 1: Compress the packed token data with selected backend
+        compressed_blob = self._compress_payload(packed_tokens)
 
         # Step 2: Compute prototype latent vector
         latent = compute_latent_vector(token_ids)
@@ -150,7 +236,7 @@ class LearnedCompressionEncoder:
         Returns:
             Packed token bytes (pass to ResidualTextTokenizer.decode()).
         """
-        return zstd.decompress(compressed_blob)
+        return self._decompress_payload(compressed_blob)
 
     # ------------------------------------------------------------------
     def latent_vector_from_blob(self, compressed_blob: bytes) -> List[float]:
@@ -169,10 +255,11 @@ class LearnedCompressionEncoder:
 
     def compression_stats(self, packed_tokens: bytes, compressed_blob: bytes) -> dict:
         return {
+            "base_compressor": self.base_compressor,
             "packed_size_bytes": len(packed_tokens),
             "compressed_size_bytes": len(compressed_blob),
-            "zstd_ratio": len(packed_tokens) / len(compressed_blob) if compressed_blob else 0.0,
-            "zstd_savings_pct": (
+            "compression_ratio": len(packed_tokens) / len(compressed_blob) if compressed_blob else 0.0,
+            "compression_savings_pct": (
                 (1 - len(compressed_blob) / len(packed_tokens)) * 100
                 if packed_tokens else 0.0
             ),

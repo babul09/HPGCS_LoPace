@@ -9,6 +9,21 @@ from typing import Dict, Any, List, Tuple
 from lopace import PromptCompressor, CompressionMethod
 
 
+METHOD_LABELS = {
+    CompressionMethod.ZSTD: "Zstd",
+    CompressionMethod.LZ4: "LZ4",
+    CompressionMethod.TOKEN: "Token (BPE)",
+    CompressionMethod.HYBRID: "Hybrid (Recommended)",
+}
+
+METHOD_ICONS = {
+    CompressionMethod.ZSTD: "🔵",
+    CompressionMethod.LZ4: "🟠",
+    CompressionMethod.TOKEN: "🟢",
+    CompressionMethod.HYBRID: "🟣",
+}
+
+
 def calculate_metrics(
     original_text: str,
     compressed_data: bytes,
@@ -174,6 +189,16 @@ def main():
             value=15,
             help="Higher values = better compression but slower (1-22)"
         )
+
+        method_selector_compressor = PromptCompressor(model=tokenizer_model, zstd_level=zstd_level)
+        available_methods = list(method_selector_compressor.available_methods())
+        selected_methods = st.multiselect(
+            "Compression Methods",
+            options=available_methods,
+            default=available_methods,
+            format_func=lambda m: METHOD_LABELS.get(m, m.value.upper()),
+            help="Select methods to run on the input prompt"
+        )
         
         st.markdown("---")
         st.markdown("### 📊 About Metrics")
@@ -195,6 +220,7 @@ def main():
         st.markdown("### 🎯 Compression Methods")
         st.caption("""
         - **Zstd**: Dictionary-based compression
+        - **LZ4**: Fast frame compression
         - **Token**: BPE tokenization with binary packing
         - **Hybrid**: Token + Zstd (recommended)
         """)
@@ -238,32 +264,20 @@ rather than provide potentially incorrect information."""
             try:
                 # Initialize compressor
                 compressor = PromptCompressor(model=tokenizer_model, zstd_level=zstd_level)
+
+                if not selected_methods:
+                    st.warning("⚠️ Please select at least one compression method in the sidebar")
+                    st.stop()
                 
                 # Process all methods
-                methods = [
-                    CompressionMethod.ZSTD,
-                    CompressionMethod.TOKEN,
-                    CompressionMethod.HYBRID
-                ]
-                
-                method_names = {
-                    CompressionMethod.ZSTD: "Zstd",
-                    CompressionMethod.TOKEN: "Token (BPE)",
-                    CompressionMethod.HYBRID: "Hybrid (Recommended)"
-                }
-                
-                method_icons = {
-                    CompressionMethod.ZSTD: "🔵",
-                    CompressionMethod.TOKEN: "🟢",
-                    CompressionMethod.HYBRID: "🟣"
-                }
+                methods = selected_methods
                 
                 # Store results for metrics section
                 all_results: Dict[str, Dict[str, Any]] = {}
                 all_metrics: Dict[str, Dict[str, Any]] = {}
                 
                 # Create tabs for each method
-                tabs = st.tabs([f"{method_icons[m]} {method_names[m]}" for m in methods])
+                tabs = st.tabs([f"{METHOD_ICONS.get(m, '⚙️')} {METHOD_LABELS.get(m, m.value)}" for m in methods])
                 
                 for tab, method in zip(tabs, methods):
                     with tab:
@@ -290,7 +304,7 @@ rather than provide potentially incorrect information."""
                         all_results[method.value] = {
                             'compressed': compressed,
                             'decompressed': decompressed,
-                            'method_name': method_names[method]
+                            'method_name': METHOD_LABELS.get(method, method.value)
                         }
                         all_metrics[method.value] = metrics
                         
@@ -328,6 +342,7 @@ rather than provide potentially incorrect information."""
                 st.session_state['all_metrics'] = all_metrics
                 st.session_state['input_prompt'] = input_prompt
                 st.session_state['compressor'] = compressor
+                st.session_state['selected_methods'] = [m.value for m in methods]
                 
             except Exception as e:
                 st.error(f"❌ Error: {str(e)}")
@@ -340,26 +355,17 @@ rather than provide potentially incorrect information."""
         
         all_metrics = st.session_state['all_metrics']
         all_results = st.session_state['all_results']
-        methods = [
-            CompressionMethod.ZSTD,
-            CompressionMethod.TOKEN,
-            CompressionMethod.HYBRID
-        ]
-        
-        method_names = {
-            CompressionMethod.ZSTD: "Zstd",
-            CompressionMethod.TOKEN: "Token (BPE)",
-            CompressionMethod.HYBRID: "Hybrid (Recommended)"
-        }
+        selected_method_values = st.session_state.get('selected_methods', [m.value for m in CompressionMethod])
+        methods = [m for m in CompressionMethod if m.value in selected_method_values and m.value in all_metrics]
         
         # Primary Evaluation Metrics
         st.markdown("### 📈 Primary Evaluation Metrics")
         
         for method in methods:
             metrics = all_metrics[method.value]
-            method_name = method_names[method]
+            method_name = METHOD_LABELS.get(method, method.value)
             
-            with st.expander(f"📊 {method_name} - Detailed Metrics", expanded=(method == CompressionMethod.HYBRID)):
+            with st.expander(f"📊 {method_name} - Detailed Metrics", expanded=(method == methods[-1])):
                 # Create metric columns
                 col1, col2, col3, col4 = st.columns(4)
                 
@@ -509,7 +515,7 @@ rather than provide potentially incorrect information."""
         st.markdown("### 📊 Method Comparison Table")
         
         comparison_data = {
-            'Method': [method_names[m] for m in methods],
+            'Method': [METHOD_LABELS.get(m, m.value.upper()) for m in methods],
             'Compression Ratio (x)': [f"{all_metrics[m.value]['compression_ratio']:.2f}" for m in methods],
             'Space Savings (%)': [f"{all_metrics[m.value]['space_savings']:.2f}" for m in methods],
             'BPC': [f"{all_metrics[m.value]['bits_per_character']:.2f}" for m in methods],
@@ -528,7 +534,7 @@ rather than provide potentially incorrect information."""
         best_savings = all_metrics[best_method.value]['space_savings']
         
         st.success(
-            f"🏆 **Best Compression Method**: **{method_names[best_method]}** "
+            f"🏆 **Best Compression Method**: **{METHOD_LABELS.get(best_method, best_method.value.upper())}** "
             f"with **{best_ratio:.2f}x** compression ratio "
             f"({best_savings:.2f}% space savings)"
         )
