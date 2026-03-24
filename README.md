@@ -29,7 +29,7 @@ When building LLM applications, storing prompts efficiently becomes a critical c
 
 ## The Solution: HPGCS Compression Engine
 
-HPGCS (Hybrid Prompt Graph Compression System) solves these challenges through a **nine-module pipeline** that combines structural graph decomposition, semantic clustering, BPE tokenization, and Zstandard entropy compression — all losslessly:
+HPGCS (Hybrid Prompt Graph Compression System) solves these challenges through a **nine-module pipeline** that combines structural graph decomposition, semantic clustering, BPE tokenization, and a selectable base compressor backend — all losslessly:
 
 - **📉 Up to 80% Space Reduction**: The multi-layer pipeline reduces prompt storage by 70–80% on average, storing 5× less data while maintaining perfect fidelity.
 
@@ -54,7 +54,7 @@ Semantic Cluster Assignment
      ↓  Module 5 — ResidualTextTokenizer
 BPE Token Encoding + Binary Packing
      ↓  Module 6 — LearnedCompressionEncoder
-Zstandard Entropy Compression
+Base Compression Backend (Zstd/LZ4/Brotli/Snappy/Gzip/Deflate/LZMA)
      ↓  Module 7 — GraphStorageDatabase
 Persistent SQLite Storage
 \`\`\`
@@ -64,7 +64,7 @@ Persistent SQLite Storage
 \`\`\`
 Load from GraphStorageDatabase
      ↓  Module 6 — LearnedCompressionEncoder (decode)
-Decompress Zstandard Blob
+Decompress Backend Blob
      ↓  Module 8 — PromptReconstructionEngine
 Decode Latent Vector → Token Sequence → Original Prompt
 \`\`\`
@@ -78,7 +78,7 @@ Decode Latent Vector → Token Sequence → Original Prompt
 | 3 | `graph.py` | `ReusableNodeManager` | Deduplicates repeated nodes across the prompt corpus |
 | 4 | `clustering.py` | `VectorSimilarityClusterer` | Cosine-similarity clustering with sentence-transformer or n-gram fallback |
 | 5 | `tokenizer_module.py` | `ResidualTextTokenizer` | BPE tokenization (tiktoken) and binary packing |
-| 6 | `encoder.py` | `LearnedCompressionEncoder` | Zstandard entropy compression / decompression |
+| 6 | `encoder.py` | `LearnedCompressionEncoder` | Selectable backend compression / decompression (`zstd`, `lz4`, `brotli`, `snappy`, `gzip`, `deflate`, `lzma`) |
 | 7 | `storage.py` | `GraphStorageDatabase` | SQLite persistence for prompts, nodes, and clusters |
 | 8 | `reconstruction.py` | `PromptReconstructionEngine` | Lossless reconstruction with hash verification |
 
@@ -90,7 +90,8 @@ Decode Latent Vector → Token Sequence → Original Prompt
 - 💾 **Persistent Storage**: SQLite-backed database keeps compressed prompts, reusable nodes, and cluster metadata
 - 🔧 **Simple API**: Single `HPGCS` class handles the full pipeline
 - 🔄 **Batch Compression**: Process lists of prompts in one call
-- 🎯 **Legacy Compatibility**: `PromptCompressor` (Zstd / Token / Hybrid) is still available for simpler use cases
+- 🎯 **Legacy Compatibility**: `PromptCompressor` supports `Zstd`, `LZ4`, `Brotli`, `Snappy`, `Gzip`, `Deflate`, `LZMA`, `Token`, and `Hybrid`
+- 🔁 **Selectable HPGCS Backend**: choose `base_compressor` for HPGCS Stage-7 payload compression
 
 ## Installation
 
@@ -101,6 +102,9 @@ pip install lopace
 ### Dependencies
 
 - `zstandard>=0.22.0` — Zstandard entropy compression
+- `lz4>=4.3.3` — LZ4 frame compression
+- `brotli>=1.1.0` — Brotli compression
+- `python-snappy>=0.7.1` — Snappy compression
 - `tiktoken>=0.5.0` — BPE tokenization
 
 Optional (for richer semantic clustering):
@@ -118,6 +122,7 @@ hpgcs = HPGCS(
     db_path=":memory:",          # or a file path for persistence
     tokenizer_model="cl100k_base",
     zstd_level=15,
+     base_compressor="zstd",      # zstd|lz4|brotli|snappy|gzip|deflate|lzma
     cluster_threshold=0.80,
     sentence_transformer=None,   # set to a model name to enable dense embeddings
 )
@@ -129,6 +134,7 @@ result = hpgcs.compress(prompt)
 print(result["prompt_id"])            # e.g. "A3F1B2C4"
 print(result["compression_ratio"])    # e.g. 3.2
 print(result["space_savings_pct"])    # e.g. 68.5
+print(result["base_compressor"])      # e.g. "zstd"
 
 # Reconstruct from the database
 text, verification = hpgcs.reconstruct(result["prompt_id"])
@@ -161,7 +167,7 @@ stats = hpgcs.database_stats()
 print(stats["total_prompts"])
 print(stats["unique_nodes"])
 print(stats["num_clusters"])
-print(stats["avg_compression_ratio"])
+print(stats["overall_compression_ratio"])
 
 # List all stored prompts
 for row in hpgcs.list_prompts():
@@ -185,6 +191,7 @@ HPGCS(
     db_path: str = ":memory:",
     tokenizer_model: str = "cl100k_base",
     zstd_level: int = 15,
+     base_compressor: str = "zstd",
     cluster_threshold: float = 0.80,
     sentence_transformer: Optional[str] = None,
 )
@@ -195,6 +202,7 @@ HPGCS(
 | `db_path` | `str` | `":memory:"` | SQLite path; use `":memory:"` for ephemeral storage |
 | `tokenizer_model` | `str` | `"cl100k_base"` | tiktoken encoding name |
 | `zstd_level` | `int` | `15` | Zstandard level 1–22 (higher = better ratio, slower) |
+| `base_compressor` | `str` | `"zstd"` | Backend for packed-token compression (`zstd`, `lz4`, `brotli`, `snappy`, `gzip`, `deflate`, `lzma`) |
 | `cluster_threshold` | `float` | `0.80` | Cosine similarity threshold for cluster assignment |
 | `sentence_transformer` | `str | None` | `None` | Embedding model name; `None` uses n-gram fallback |
 
@@ -218,6 +226,7 @@ Run the full compression pipeline on a single prompt. Returns a metrics dict:
     "cluster_similarity":    float,
     "token_count":           int,
     "packed_size_bytes":     int,
+     "base_compressor":       str,
     "components":            list,   # [(type, content), ...]
     "has_structure":         bool,
 }
@@ -268,9 +277,26 @@ compressor = PromptCompressor(model="cl100k_base", zstd_level=15)
 
 prompt = "You are a helpful AI assistant..."
 
-# Zstd only
+# Zstd
 compressed = compressor.compress(prompt, CompressionMethod.ZSTD)
 original   = compressor.decompress(compressed, CompressionMethod.ZSTD)
+
+# LZ4
+compressed = compressor.compress(prompt, CompressionMethod.LZ4)
+original   = compressor.decompress(compressed, CompressionMethod.LZ4)
+
+# Brotli
+compressed = compressor.compress(prompt, CompressionMethod.BROTLI)
+original   = compressor.decompress(compressed, CompressionMethod.BROTLI)
+
+# Snappy
+compressed = compressor.compress(prompt, CompressionMethod.SNAPPY)
+original   = compressor.decompress(compressed, CompressionMethod.SNAPPY)
+
+# Gzip / Deflate / LZMA
+for method in [CompressionMethod.GZIP, CompressionMethod.DEFLATE, CompressionMethod.LZMA]:
+     compressed = compressor.compress(prompt, method)
+     original = compressor.decompress(compressed, method)
 
 # Token-based (BPE)
 compressed = compressor.compress(prompt, CompressionMethod.TOKEN)
@@ -294,10 +320,23 @@ for method, s in stats["methods"].items():
 | `decompress(data, method)` | Decompress bytes back to original string |
 | `compress_zstd(text)` | Zstandard-only compression |
 | `decompress_zstd(data)` | Zstandard decompression |
+| `compress_lz4(text)` | LZ4 compression |
+| `decompress_lz4(data)` | LZ4 decompression |
+| `compress_brotli(text)` | Brotli compression |
+| `decompress_brotli(data)` | Brotli decompression |
+| `compress_snappy(text)` | Snappy compression |
+| `decompress_snappy(data)` | Snappy decompression |
+| `compress_gzip(text)` | Gzip compression |
+| `decompress_gzip(data)` | Gzip decompression |
+| `compress_deflate(text)` | DEFLATE compression (zlib) |
+| `decompress_deflate(data)` | DEFLATE decompression |
+| `compress_lzma(text)` | LZMA compression |
+| `decompress_lzma(data)` | LZMA decompression |
 | `compress_token(text)` | BPE tokenization + binary packing |
 | `decompress_token(data)` | Token-based decompression |
 | `compress_hybrid(text)` | Token + Zstd (best ratio) |
 | `decompress_hybrid(data)` | Hybrid decompression |
+| `available_methods()` | Returns methods available in the current environment |
 | `compress_and_return_both(text, method)` | Returns `(original, compressed)` |
 | `get_compression_stats(text, method=None)` | Per-method stats dict |
 | `calculate_shannon_entropy(text, unit)` | Shannon entropy in bits |
@@ -307,6 +346,12 @@ for method, s in stats["methods"].items():
 
 \`\`\`python
 CompressionMethod.ZSTD    # Zstandard dictionary compression
+CompressionMethod.LZ4     # LZ4 frame compression
+CompressionMethod.BROTLI  # Brotli compression
+CompressionMethod.SNAPPY  # Snappy compression
+CompressionMethod.GZIP    # Gzip compression
+CompressionMethod.DEFLATE # DEFLATE compression
+CompressionMethod.LZMA    # LZMA compression
 CompressionMethod.TOKEN   # BPE tokenization + binary packing
 CompressionMethod.HYBRID  # TOKEN + ZSTD (recommended for databases)
 \`\`\`
@@ -335,7 +380,7 @@ BPE tokenization via tiktoken. Packs token IDs as `uint16` (2 bytes/token) for I
 
 #### Module 6 — `LearnedCompressionEncoder`
 
-Applies Zstandard (LZ77 + FSE/Huffman) entropy coding to the binary token payload. Stores a compact latent representation alongside the compressed blob.
+Applies a selectable backend (`zstd`, `lz4`, `brotli`, `snappy`, `gzip`, `deflate`, `lzma`) to the binary token payload. Stores a compact latent representation alongside the compressed blob.
 
 #### Module 7 — `GraphStorageDatabase`
 
@@ -347,9 +392,11 @@ Reverses the pipeline: decompresses → decodes token IDs → reconstructs text 
 
 ### Compression Techniques
 
-1. **LZ77 (Sliding Window)** — used internally by Zstandard to find repeated byte sequences and replace them with back-references.
-2. **FSE / Huffman Coding** — Zstandard's Finite State Entropy assigns shorter codes to more-frequent symbols.
-3. **BPE Tokenization** — tiktoken reduces the vocabulary before entropy coding, improving downstream compression.
+1. **LZ77 / FSE (Zstandard)** — balanced speed and ratio for general use.
+2. **LZ4** — very fast compression/decompression for low-latency paths.
+3. **Brotli / Gzip / Deflate / LZMA** — classic high-ratio general-purpose codecs.
+4. **Snappy** — high-throughput low-overhead codec.
+5. **BPE Tokenization** — tiktoken reduces vocabulary before entropy coding in token/hybrid paths.
 
 ### Shannon Entropy (Theoretical Limit)
 
@@ -387,6 +434,20 @@ Benchmarks conducted on 10 diverse prompts (small, medium, large categories).
 
 ## Interactive Web App (Streamlit)
 
+### Main App (HPGCS Pipeline + Method Comparison)
+
+\`\`\`bash
+streamlit run hpgcs_app.py
+\`\`\`
+
+Includes:
+
+- Selectable **HPGCS Base Compressor** (pipeline backend)
+- Multi-select **legacy comparison methods**
+- HPGCS vs selected legacy method benchmarking
+
+### Legacy Compression Playground
+
 \`\`\`bash
 streamlit run streamlit_app.py
 \`\`\`
@@ -394,6 +455,7 @@ streamlit run streamlit_app.py
 Opens at `http://localhost:8501`. Features:
 
 - Real-time compression of user-supplied prompts
+- Method multiselect (all available legacy methods)
 - All four industry-standard metrics:
   - Compression Ratio: CR = S_original / S_compressed
   - Space Savings: SS = 1 − S_compressed / S_original

@@ -3,26 +3,6 @@ Hybrid Prompt Graph Compression System (HPGCS) - Main Pipeline Orchestrator
 
 Combines all nine modules into a single coherent compression / decompression
 pipeline as described in the HPGCS prototype specification.
-
-Pipeline (compression)
-----------------------
-Prompt Input
-     ↓  PromptParser
-Prompt Graph Decomposer
-     ↓  ReusableNodeManager
-Vector Similarity Clustering
-     ↓  ResidualTextTokenizer
-Learned Compression Encoder
-    ↓  Base Compression Backend
-Graph Storage Database
-
-Pipeline (decompression / reconstruction)
------------------------------------------
-Load Graph Representation
-     ↓  Decompress Data
-Decode Latent Vector
-     ↓  Reconstruct Token Sequence
-Rebuild Original Prompt
 """
 
 import json
@@ -38,6 +18,7 @@ from .tokenizer_module import ResidualTextTokenizer
 from .encoder import LearnedCompressionEncoder
 from .storage import GraphStorageDatabase, PromptRecord
 from .reconstruction import PromptReconstructionEngine
+from .corpus_store import CorpusStore
 
 
 class HPGCS:
@@ -45,21 +26,20 @@ class HPGCS:
     Hybrid Prompt Graph Compression System.
 
     A multi-layer prompt compression pipeline that combines:
-      • Structural graph decomposition
-      • Reusable node deduplication
-      • Semantic vector clustering
-      • BPE residual tokenization
-            • Selectable base compression backend
+      - Structural graph decomposition
+      - Reusable node deduplication
+      - Semantic vector clustering
+      - BPE residual tokenization
+      - Selectable base compression backend
+      - Corpus-level component deduplication
 
     Args:
         db_path:              SQLite database path (":memory:" for in-memory).
         tokenizer_model:      tiktoken encoding name (default: "cl100k_base").
-        zstd_level:           Zstandard compression level 1–22 (default: 15).
-        base_compressor:      Packed-token compressor backend for encoder
-                              (e.g. zstd, lz4, brotli, snappy, gzip, deflate, lzma).
-        cluster_threshold:    Cosine similarity threshold for clustering (default: 0.80).
-        sentence_transformer: Model name for semantic embeddings
-                              (None = use n-gram fallback).
+        zstd_level:           Zstandard compression level 1-22 (default: 15).
+        base_compressor:      Packed-token compressor backend for encoder.
+        cluster_threshold:    Cosine similarity threshold for clustering.
+        sentence_transformer: Model name for semantic embeddings (None = n-gram fallback).
     """
 
     def __init__(
@@ -71,33 +51,33 @@ class HPGCS:
         cluster_threshold: float = 0.80,
         sentence_transformer: Optional[str] = None,
     ):
-        # Module 1 – Prompt Parser
+        # Module 1 - Prompt Parser
         self.parser = PromptParser()
 
-        # Modules 2 & 3 – Graph Decomposer + Reusable Node Manager
+        # Modules 2 & 3 - Graph Decomposer + Reusable Node Manager
         self.node_manager = ReusableNodeManager()
         self.decomposer = PromptGraphDecomposer(self.node_manager)
 
-        # Module 4 – Clustering
+        # Module 4 - Clustering
         self.clusterer = VectorSimilarityClusterer(
             model_name=sentence_transformer or VectorSimilarityClusterer.DEFAULT_MODEL,
             threshold=cluster_threshold,
             use_sentence_transformers=(sentence_transformer is not None),
         )
 
-        # Module 5 – Tokenizer
+        # Module 5 - Tokenizer
         self.tokenizer = ResidualTextTokenizer(model=tokenizer_model)
 
-        # Module 6 – Encoder + selectable base compressor
+        # Module 6 - Encoder + selectable base compressor
         self.encoder = LearnedCompressionEncoder(
             zstd_level=zstd_level,
             base_compressor=base_compressor,
         )
 
-        # Module 7 – Graph Storage Database
+        # Module 7 - Graph Storage Database
         self.db = GraphStorageDatabase(db_path=db_path)
 
-        # Module 8 – Reconstruction Engine
+        # Module 8 - Reconstruction Engine
         self.reconstructor = PromptReconstructionEngine(
             self.node_manager, self.tokenizer, self.encoder
         )
@@ -112,9 +92,15 @@ class HPGCS:
             "clustering_backend": self.clusterer.backend,
         }
 
-    # ──────────────────────────────────────────────────────────────────────
+        # Corpus-level dedup store (research extension)
+        self.corpus = CorpusStore(
+            db_path=db_path if db_path == ":memory:" else db_path + ".corpus",
+            zstd_level=zstd_level,
+        )
+
+    # ------------------------------------------------------------------
     # Compression
-    # ──────────────────────────────────────────────────────────────────────
+    # ------------------------------------------------------------------
 
     def compress(self, text: str, prompt_id: Optional[str] = None) -> dict:
         """
@@ -135,28 +121,26 @@ class HPGCS:
 
         original_size = len(text.encode("utf-8"))
 
-        # ── Stage 1: Parse ────────────────────────────────────────────────
+        # Stage 1: Parse
         parsed = self.parser.parse(text)
 
-        # ── Stage 2 & 3: Graph decomposition + node deduplication ─────────
+        # Stage 2 & 3: Graph decomposition + node deduplication
         prompt_graph = self.decomposer.decompose(parsed, prompt_id)
 
-        # ── Stage 4: Vector similarity clustering ─────────────────────────
+        # Stage 4: Vector similarity clustering
         cluster_id, cluster_sim = self.clusterer.assign(prompt_id, text)
 
-        # ── Stage 5: Tokenize residual text ───────────────────────────────
-        # "Residual" = the full prompt text (after node deduplication the
-        # graph stores node IDs; residual content is what must be encoded).
+        # Stage 5: Tokenize residual text
         token_ids = self.tokenizer.tokenize(text)
         packed_tokens = self.tokenizer.pack(token_ids)
 
-        # ── Stage 6 & 7: Encode + base compression ───────────────────────
+        # Stage 6 & 7: Encode + base compression
         compressed_blob, latent_bytes = self.encoder.encode(packed_tokens, token_ids)
 
         compressed_size = len(compressed_blob)
         t_compress = time.perf_counter() - t_start
 
-        # ── Stage 8: Store in graph database ──────────────────────────────
+        # Stage 8: Store in graph database
         record = PromptRecord(
             prompt_id=prompt_id,
             original_text=text,
@@ -203,9 +187,9 @@ class HPGCS:
         """Compress a list of prompts."""
         return [self.compress(t) for t in texts]
 
-    # ──────────────────────────────────────────────────────────────────────
+    # ------------------------------------------------------------------
     # Reconstruction
-    # ──────────────────────────────────────────────────────────────────────
+    # ------------------------------------------------------------------
 
     def reconstruct(self, prompt_id: str) -> Tuple[Optional[str], dict]:
         """
@@ -241,9 +225,9 @@ class HPGCS:
             "decompression_time_s": decomp_time,
         }
 
-    # ──────────────────────────────────────────────────────────────────────
+    # ------------------------------------------------------------------
     # Analytics
-    # ──────────────────────────────────────────────────────────────────────
+    # ------------------------------------------------------------------
 
     def database_stats(self) -> dict:
         """Return aggregate statistics about the compressed dataset."""
@@ -277,9 +261,9 @@ class HPGCS:
         """Return cluster info from the database."""
         return self.db.all_clusters()
 
-    # ──────────────────────────────────────────────────────────────────────
+    # ------------------------------------------------------------------
     # Utilities
-    # ──────────────────────────────────────────────────────────────────────
+    # ------------------------------------------------------------------
 
     def clear(self):
         """Reset the entire system (database + in-memory state)."""
@@ -300,3 +284,71 @@ class HPGCS:
             f"nodes={stats['unique_nodes']}, "
             f"clusters={stats['num_clusters']})"
         )
+
+    # ------------------------------------------------------------------
+    # Corpus-Aware Compression (Research Direction 1)
+    # ------------------------------------------------------------------
+
+    def compress_corpus(self, text: str, prompt_id: Optional[str] = None) -> dict:
+        """
+        Compress using corpus-level component deduplication.
+
+        Instead of compressing the full text, splits into structural
+        components and stores each unique component ONCE. Subsequent
+        prompts sharing components get near-zero marginal storage.
+        """
+        t_start = time.perf_counter()
+
+        if not prompt_id:
+            prompt_id = str(uuid.uuid4())[:8].upper()
+
+        original_size = len(text.encode("utf-8"))
+
+        # Stage 1: Segment-preserving parse
+        segments = self.parser.parse_segments(text)
+
+        # Stage 2: Corpus-level dedup store
+        store_result = self.corpus.store(prompt_id, text, segments)
+
+        # Stage 3: Cluster assignment
+        cluster_id, cluster_sim = self.clusterer.assign(prompt_id, text)
+
+        t_elapsed = time.perf_counter() - t_start
+
+        ref_segments = [s for s in segments if s["type"] == "ref"]
+        lit_segments = [s for s in segments if s["type"] == "literal"]
+
+        return {
+            "prompt_id": prompt_id,
+            "original_size_bytes": original_size,
+            "marginal_bytes": store_result["marginal_bytes"],
+            "marginal_ratio": store_result["marginal_ratio"],
+            "marginal_savings_pct": store_result["marginal_savings_pct"],
+            "blueprint_size": store_result["blueprint_size"],
+            "new_bytes_stored": store_result["new_bytes_stored"],
+            "reused_refs": store_result["reused_refs"],
+            "new_refs": store_result["new_refs"],
+            "total_refs": store_result["total_refs"],
+            "n_components": len(ref_segments),
+            "n_delimiters": len(lit_segments),
+            "component_types": [s.get("ctype", "") for s in ref_segments],
+            "cluster_id": cluster_id,
+            "cluster_similarity": cluster_sim,
+            "compression_time_s": t_elapsed,
+        }
+
+    def compress_corpus_batch(self, texts: List[str]) -> List[dict]:
+        """Compress a batch of prompts with corpus-level dedup."""
+        return [self.compress_corpus(t) for t in texts]
+
+    def reconstruct_corpus(self, prompt_id: str) -> Tuple[Optional[str], dict]:
+        """Reconstruct a prompt stored via compress_corpus()."""
+        return self.corpus.retrieve(prompt_id)
+
+    def corpus_stats(self) -> dict:
+        """Return corpus-level compression statistics."""
+        return self.corpus.corpus_stats()
+
+    def corpus_node_report(self) -> List[dict]:
+        """Return nodes sorted by reuse count."""
+        return self.corpus.node_reuse_report()

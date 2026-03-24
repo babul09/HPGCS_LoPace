@@ -8,6 +8,24 @@ Recognises common delimiter keywords used in LLM prompt construction.
 import re
 from typing import Dict, List, Tuple, Optional
 
+_DELIMITER_FINDER = re.compile(
+    r"^((?:system|instruction|context|tool|assistant|user|human|question|answer)\s*:\s*)",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+_KEYWORD_TO_CTYPE = {
+    "system": "system",
+    "instruction": "instruction",
+    "context": "context",
+    "tool": "tool",
+    "assistant": "assistant",
+    "user": "user_query",
+    "human": "human",
+    "question": "question",
+    "answer": "answer",
+}
+
+
 
 # Ordered list of (component_type, regex_pattern_for_delimiter)
 _COMPONENT_RULES: List[Tuple[str, str]] = [
@@ -137,3 +155,76 @@ class PromptParser:
     def parse_batch(self, texts: List[str]) -> List[ParsedPrompt]:
         """Parse a list of prompts."""
         return [self.parse(t) for t in texts]
+
+    def parse_segments(self, text: str) -> List[dict]:
+        """
+        Parse prompt into lossless-reconstructable segments.
+
+        Unlike parse(), this method preserves exact delimiters and whitespace
+        so that ''.join(segment values) == original text.
+
+        Returns a list of segments, each being either:
+            {"type": "literal", "text": "System: "}
+                — delimiter / formatting text, stored inline per-prompt
+            {"type": "ref", "content": "...", "ctype": "system"}
+                — component content, deduplicated across corpus
+
+        Invariant:
+            ''.join(s["text"] if s["type"]=="literal" else s["content"]
+                    for s in segments) == text
+        """
+        if not text:
+            return [{"type": "ref", "content": "", "ctype": "unstructured"}]
+
+        matches = list(_DELIMITER_FINDER.finditer(text))
+
+        if not matches:
+            # No role delimiters — entire text is one component
+            return [{"type": "ref", "content": text, "ctype": "unstructured"}]
+
+        segments: List[dict] = []
+
+        # ── Preamble: any text before the first delimiter ──
+        if matches[0].start() > 0:
+            preamble = text[: matches[0].start()]
+            segments.append({
+                "type": "ref",
+                "content": preamble,
+                "ctype": "unstructured",
+            })
+
+        # ── Process each delimited section ──
+        for i, m in enumerate(matches):
+            # The exact delimiter text (e.g. "System: ", "user:  ")
+            segments.append({"type": "literal", "text": m.group(0)})
+
+            # Determine component type from the keyword
+            keyword = m.group(1).strip().rstrip(":").strip().lower()
+            ctype = _KEYWORD_TO_CTYPE.get(keyword, "unstructured")
+
+            # Content runs from end of delimiter to start of next delimiter
+            content_start = m.end()
+            content_end = (
+                matches[i + 1].start()
+                if i + 1 < len(matches)
+                else len(text)
+            )
+            content = text[content_start:content_end]
+
+            if content:  # skip empty (back-to-back delimiters)
+                segments.append({
+                    "type": "ref",
+                    "content": content,
+                    "ctype": ctype,
+                })
+
+        # ── Verify lossless reconstruction ──
+        rebuilt = "".join(
+            s["text"] if s["type"] == "literal" else s["content"]
+            for s in segments
+        )
+        if rebuilt != text:
+            # Fallback: store entire text as single unstructured node
+            return [{"type": "ref", "content": text, "ctype": "unstructured"}]
+
+        return segments
