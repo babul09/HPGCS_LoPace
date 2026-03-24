@@ -988,6 +988,49 @@ def corpus_dedup_chunked(prompts: List[str], level: int = 15,
         "chunk_config": {"min": min_chunk, "max": max_chunk},
     }
 
+def delta_compression_method(prompts: List[str], level: int = 15,
+                              similarity_threshold: float = 0.4,
+                              sample_centroids: int = 50) -> Dict:
+    """Delta compression against cluster centroids."""
+    from lopace.delta_store import DeltaStore
+
+    store = DeltaStore(
+        db_path=":memory:",
+        zstd_level=level,
+        similarity_threshold=similarity_threshold,
+        sample_centroids=sample_centroids,
+    )
+
+    for i, text in enumerate(prompts):
+        result = store.store(f"P{i:06d}", text)
+
+        # Verify every 200th prompt
+        if i % 200 == 0:
+            rebuilt, v = store.retrieve(f"P{i:06d}")
+            assert v["exact_match"], f"Delta reconstruction failed at prompt {i}: mode={v.get('storage_mode')}"
+        
+        # Progress for large datasets
+        if (i + 1) % 1000 == 0:
+            print(f"\r    Processing {i+1}/{len(prompts)}...", end="", flush=True)
+
+    if len(prompts) > 1000:
+        print()
+
+    stats = store.corpus_stats()
+    store.close()
+
+    return {
+        "method": "delta_compression",
+        "total_original": stats["total_original_bytes"],
+        "total_compressed": stats["total_stored_bytes"],
+        "ratio": stats["corpus_compression_ratio"],
+        "savings_pct": stats["corpus_space_savings_pct"],
+        "n_centroids": stats["n_centroids"],
+        "n_deltas": stats["n_deltas"],
+        "delta_fraction": stats["delta_fraction"],
+        "avg_delta_similarity": stats["avg_delta_similarity"],
+    }
+
 
 # ─── Scaling Analysis ─────────────────────────────────────────────────────────
 
@@ -1067,10 +1110,8 @@ def run_experiment(name: str, prompts: List[str], metadata: Dict) -> Dict:
 
     results = {"experiment": name, "metadata": metadata, "methods": {}}
 
-    t0 = time.time()
-
     # 1. Per-prompt Zstd
-    print("  [1/5] Per-prompt Zstd...", end=" ", flush=True)
+    print("  [1/6] Per-prompt Zstd...", end=" ", flush=True)
     t = time.time()
     r = baseline_zstd(prompts)
     r["time_s"] = time.time() - t
@@ -1078,7 +1119,7 @@ def run_experiment(name: str, prompts: List[str], metadata: Dict) -> Dict:
     print(f"{r['ratio']:.2f}x  {r['savings_pct']:.1f}%  ({r['time_s']:.2f}s)")
 
     # 2. Per-prompt Hybrid
-    print("  [2/5] Per-prompt Hybrid...", end=" ", flush=True)
+    print("  [2/6] Per-prompt Hybrid...", end=" ", flush=True)
     t = time.time()
     r = baseline_hybrid(prompts)
     r["time_s"] = time.time() - t
@@ -1089,7 +1130,7 @@ def run_experiment(name: str, prompts: List[str], metadata: Dict) -> Dict:
         print(f"skipped ({r['error']})")
 
     # 3. Zstd with dictionary
-    print("  [3/5] Zstd + dictionary...", end=" ", flush=True)
+    print("  [3/6] Zstd + dictionary...", end=" ", flush=True)
     t = time.time()
     r = baseline_zstd_dictionary(prompts)
     r["time_s"] = time.time() - t
@@ -1101,7 +1142,7 @@ def run_experiment(name: str, prompts: List[str], metadata: Dict) -> Dict:
         print(f"skipped ({r['error']})")
 
     # 4. Corpus dedup (component-level)
-    print("  [4/5] Corpus-level dedup...", end=" ", flush=True)
+    print("  [4/6] Corpus-level dedup...", end=" ", flush=True)
     t = time.time()
     r = corpus_dedup_method(prompts)
     r["time_s"] = time.time() - t
@@ -1110,13 +1151,23 @@ def run_experiment(name: str, prompts: List[str], metadata: Dict) -> Dict:
           f"({r['unique_nodes']} nodes, {r['avg_reuse']:.1f}x reuse)  ({r['time_s']:.2f}s)")
 
     # 5. Corpus dedup with sub-component chunking
-    print("  [5/5] Corpus dedup (chunked)...", end=" ", flush=True)
+    print("  [5/6] Corpus dedup (chunked)...", end=" ", flush=True)
     t = time.time()
     r = corpus_dedup_chunked(prompts)
     r["time_s"] = time.time() - t
     results["methods"]["corpus_dedup_chunked"] = r
     print(f"{r['ratio']:.2f}x  {r['savings_pct']:.1f}%  "
           f"({r['unique_nodes']} nodes, {r['avg_reuse']:.1f}x reuse)  ({r['time_s']:.2f}s)")
+
+    # 6. Delta compression
+    print("  [6/6] Delta compression...", end=" ", flush=True)
+    t = time.time()
+    r = delta_compression_method(prompts)
+    r["time_s"] = time.time() - t
+    results["methods"]["delta"] = r
+    print(f"{r['ratio']:.2f}x  {r['savings_pct']:.1f}%  "
+          f"({r['n_centroids']} centroids, {r['n_deltas']} deltas, "
+          f"{r['delta_fraction']:.1%} delta rate)  ({r['time_s']:.2f}s)")
 
     # Comparison table
     print(f"\n  {'Method':<30} {'Ratio':>8} {'Savings':>10} {'Stored':>14} {'Time':>8}")
@@ -1125,7 +1176,8 @@ def run_experiment(name: str, prompts: List[str], metadata: Dict) -> Dict:
                         ("hybrid", "Per-prompt Hybrid"),
                         ("zstd_dict", "Zstd + Dictionary"),
                         ("corpus_dedup", "Corpus Dedup"),
-                        ("corpus_dedup_chunked", "Corpus Dedup (chunked)")]:
+                        ("corpus_dedup_chunked", "Corpus Dedup (chunked)"),
+                        ("delta", "Delta Compression")]:
         m = results["methods"].get(key, {})
         if "error" in m:
             continue
@@ -1136,6 +1188,8 @@ def run_experiment(name: str, prompts: List[str], metadata: Dict) -> Dict:
         print(f"  {label:<30} {ratio:>8.2f}x {savings:>9.1f}% {stored:>13,} {t_s:>7.1f}s")
 
     return results
+
+    
 
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
@@ -1356,18 +1410,16 @@ Examples:
     print(f"\n  Full results saved to {args.output}")
 
     # ── Summary ───────────────────────────────────────────────────────
-    print(f"\n{'='*70}")
-    print(f"  SUMMARY ACROSS ALL EXPERIMENTS")
-    print(f"{'='*70}")
-    print(f"  {'Experiment':<40} {'Zstd':>7} {'Hybrid':>8} {'Dict':>7} {'Dedup':>7}")
-    print(f"  {'-'*72}")
+    print(f"  {'Experiment':<40} {'Zstd':>7} {'Hybrid':>8} {'Dict':>7} {'Dedup':>7} {'Delta':>7}")
+    print(f"  {'-'*80}")
     for r in all_results:
         name = r["experiment"][:40]
         zr = r["methods"].get("zstd", {}).get("ratio", 0)
         hr = r["methods"].get("hybrid", {}).get("ratio", 0)
         dr = r["methods"].get("zstd_dict", {}).get("ratio_with_dict", 0)
         cr = r["methods"].get("corpus_dedup", {}).get("ratio", 0)
-        print(f"  {name:<40} {zr:>7.2f}x {hr:>7.2f}x {dr:>7.2f}x {cr:>7.2f}x")
+        dl = r["methods"].get("delta", {}).get("ratio", 0)
+        print(f"  {name:<40} {zr:>7.2f}x {hr:>7.2f}x {dr:>7.2f}x {cr:>7.2f}x {dl:>7.2f}x")
 
     # If real data was used, print additional comparison
     if is_real_data_mode:
