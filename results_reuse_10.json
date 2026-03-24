@@ -1,0 +1,166 @@
+{
+  "config": {
+    "n_prompts": 1000,
+    "system_reuse": 0.1
+  },
+  "per_prompt_zstd": {
+    "method": "per_prompt_zstd",
+    "n_prompts": 1000,
+    "total_original": 1824552,
+    "total_compressed": 1005842,
+    "compression_ratio": 1.8139548756166475,
+    "space_savings_pct": 44.87183703177548,
+    "mean_compressed_size": 1005.842,
+    "elapsed_s": 0.08919452500049374
+  },
+  "per_prompt_hybrid": {
+    "method": "per_prompt_hybrid",
+    "n_prompts": 1000,
+    "total_original": 1824552,
+    "total_compressed": 804533,
+    "compression_ratio": 2.2678398524361336,
+    "space_savings_pct": 55.905175626674385,
+    "mean_compressed_size": 804.533,
+    "elapsed_s": 3.8575556720006716
+  },
+  "corpus_dedup": {
+    "method": "corpus_dedup",
+    "n_prompts": 1000,
+    "total_original": 1824552,
+    "total_compressed": 298008,
+    "compression_ratio": 6.122493355883064,
+    "space_savings_pct": 83.66678505189219,
+    "n_unique_nodes": 126,
+    "avg_refs_per_node": 21.349206349206348,
+    "blueprint_overhead_pct": 95.19543099514107,
+    "node_compression_ratio": 1.2464031289286213,
+    "mean_marginal_bytes": 298.008,
+    "marginal_first_10": [
+      1601,
+      381,
+      1015,
+      1644,
+      386,
+      387,
+      406,
+      411,
+      301,
+      385
+    ],
+    "marginal_last_10": [
+      315,
+      315,
+      315,
+      211,
+      315,
+      408,
+      422,
+      315,
+      315,
+      211
+    ],
+    "elapsed_s": 0.06256834200030426
+  },
+  "scaling": [
+    {
+      "n_prompts": 1,
+      "corpus_dedup_ratio": 1.372891942535915,
+      "corpus_dedup_bytes": 1601,
+      "per_prompt_zstd_bytes": 1179,
+      "per_prompt_zstd_ratio": 1.8642917726887192,
+      "unique_nodes": 3,
+      "avg_reuse": 1.0,
+      "dedup_advantage_pct": -35.7930449533503
+    },
+    {
+      "n_prompts": 2,
+      "corpus_dedup_ratio": 2.211402623612513,
+      "corpus_dedup_bytes": 1982,
+      "per_prompt_zstd_bytes": 2339,
+      "per_prompt_zstd_ratio": 1.873877725523728,
+      "unique_nodes": 4,
+      "avg_reuse": 1.5,
+      "dedup_advantage_pct": 15.262932877297985
+    },
+    {
+      "n_prompts": 5,
+      "corpus_dedup_ratio": 2.379948279291824,
+      "corpus_dedup_bytes": 5027,
+      "per_prompt_zstd_bytes": 6383,
+      "per_prompt_zstd_ratio": 1.8743537521541596,
+      "unique_nodes": 10,
+      "avg_reuse": 1.6,
+      "dedup_advantage_pct": 21.24392918690271
+    },
+    {
+      "n_prompts": 10,
+      "corpus_dedup_ratio": 3.2733844152089056,
+      "corpus_dedup_bytes": 6917,
+      "per_prompt_zstd_bytes": 12116,
+      "per_prompt_zstd_ratio": 1.8687685704853088,
+      "unique_nodes": 15,
+      "avg_reuse": 2.0,
+      "dedup_advantage_pct": 42.910201386596235
+    },
+    {
+      "n_prompts": 25,
+      "corpus_dedup_ratio": 3.906687027809034,
+      "corpus_dedup_bytes": 12442,
+      "per_prompt_zstd_bytes": 26485,
+      "per_prompt_zstd_ratio": 1.8352652444780064,
+      "unique_nodes": 28,
+      "avg_reuse": 2.4642857142857144,
+      "dedup_advantage_pct": 53.02246554653578
+    },
+    {
+      "n_prompts": 50,
+      "corpus_dedup_ratio": 4.6195174413167495,
+      "corpus_dedup_bytes": 21386,
+      "per_prompt_zstd_bytes": 53701,
+      "per_prompt_zstd_ratio": 1.8396864117986629,
+      "unique_nodes": 40,
+      "avg_reuse": 3.5,
+      "dedup_advantage_pct": 60.17578816036946
+    },
+    {
+      "n_prompts": 100,
+      "corpus_dedup_ratio": 5.062959047407078,
+      "corpus_dedup_bytes": 35944,
+      "per_prompt_zstd_bytes": 99856,
+      "per_prompt_zstd_ratio": 1.8224543342413075,
+      "unique_nodes": 53,
+      "avg_reuse": 5.037735849056604,
+      "dedup_advantage_pct": 64.00416599903862
+    },
+    {
+      "n_prompts": 250,
+      "corpus_dedup_ratio": 5.672370592189696,
+      "corpus_dedup_bytes": 81815,
+      "per_prompt_zstd_bytes": 255171,
+      "per_prompt_zstd_ratio": 1.8187215631870393,
+      "unique_nodes": 80,
+      "avg_reuse": 8.4875,
+      "dedup_advantage_pct": 67.93718721955081
+    },
+    {
+      "n_prompts": 500,
+      "corpus_dedup_ratio": 5.930391798580524,
+      "corpus_dedup_bytes": 155973,
+      "per_prompt_zstd_bytes": 509008,
+      "per_prompt_zstd_ratio": 1.8172229120171,
+      "unique_nodes": 110,
+      "avg_reuse": 12.336363636363636,
+      "dedup_advantage_pct": 69.35745607141735
+    },
+    {
+      "n_prompts": 1000,
+      "corpus_dedup_ratio": 6.122493355883064,
+      "corpus_dedup_bytes": 298008,
+      "per_prompt_zstd_bytes": 1005842,
+      "per_prompt_zstd_ratio": 1.8139548756166475,
+      "unique_nodes": 126,
+      "avg_reuse": 21.349206349206348,
+      "dedup_advantage_pct": 70.37228511038514
+    }
+  ]
+}

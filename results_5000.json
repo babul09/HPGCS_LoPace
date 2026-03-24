@@ -1,0 +1,186 @@
+{
+  "config": {
+    "n_prompts": 5000,
+    "system_reuse": 0.8
+  },
+  "per_prompt_zstd": {
+    "method": "per_prompt_zstd",
+    "n_prompts": 5000,
+    "total_original": 9742158,
+    "total_compressed": 5279897,
+    "compression_ratio": 1.845141676059211,
+    "space_savings_pct": 45.80361969083236,
+    "mean_compressed_size": 1055.9794,
+    "elapsed_s": 0.5119372230001318
+  },
+  "per_prompt_hybrid": {
+    "method": "per_prompt_hybrid",
+    "n_prompts": 5000,
+    "total_original": 9742158,
+    "total_compressed": 4223879,
+    "compression_ratio": 2.306448172402666,
+    "space_savings_pct": 56.64329196878146,
+    "mean_compressed_size": 844.7758,
+    "elapsed_s": 20.582538784999997
+  },
+  "corpus_dedup": {
+    "method": "corpus_dedup",
+    "n_prompts": 5000,
+    "total_original": 9742158,
+    "total_compressed": 1441233,
+    "compression_ratio": 6.759599592848623,
+    "space_savings_pct": 85.20622432935289,
+    "n_unique_nodes": 127,
+    "avg_refs_per_node": 106.54330708661418,
+    "blueprint_overhead_pct": 98.99995351202755,
+    "node_compression_ratio": 1.245334073405953,
+    "mean_marginal_bytes": 288.2466,
+    "marginal_first_10": [
+      2329,
+      378,
+      279,
+      289,
+      1520,
+      283,
+      1006,
+      384,
+      280,
+      492
+    ],
+    "marginal_last_10": [
+      315,
+      422,
+      315,
+      315,
+      318,
+      211,
+      422,
+      318,
+      211,
+      211
+    ],
+    "elapsed_s": 0.296592192999924
+  },
+  "scaling": [
+    {
+      "n_prompts": 1,
+      "corpus_dedup_ratio": 1.4276513525118077,
+      "corpus_dedup_bytes": 2329,
+      "per_prompt_zstd_bytes": 1726,
+      "per_prompt_zstd_ratio": 1.9264194669756662,
+      "unique_nodes": 4,
+      "avg_reuse": 1.0,
+      "dedup_advantage_pct": -34.936268829663966
+    },
+    {
+      "n_prompts": 2,
+      "corpus_dedup_ratio": 2.1200591060214258,
+      "corpus_dedup_bytes": 2707,
+      "per_prompt_zstd_bytes": 3009,
+      "per_prompt_zstd_ratio": 1.9072781655034896,
+      "unique_nodes": 5,
+      "avg_reuse": 1.4,
+      "dedup_advantage_pct": 10.036556995679625
+    },
+    {
+      "n_prompts": 5,
+      "corpus_dedup_ratio": 2.348696558915537,
+      "corpus_dedup_bytes": 4795,
+      "per_prompt_zstd_bytes": 6014,
+      "per_prompt_zstd_ratio": 1.8726305287662122,
+      "unique_nodes": 10,
+      "avg_reuse": 1.5,
+      "dedup_advantage_pct": 20.26937146657799
+    },
+    {
+      "n_prompts": 10,
+      "corpus_dedup_ratio": 3.0266574585635357,
+      "corpus_dedup_bytes": 7240,
+      "per_prompt_zstd_bytes": 11708,
+      "per_prompt_zstd_ratio": 1.8716262384694227,
+      "unique_nodes": 16,
+      "avg_reuse": 1.8125,
+      "dedup_advantage_pct": 38.16194055346771
+    },
+    {
+      "n_prompts": 25,
+      "corpus_dedup_ratio": 3.955484167049105,
+      "corpus_dedup_bytes": 13074,
+      "per_prompt_zstd_bytes": 27832,
+      "per_prompt_zstd_ratio": 1.8580770336303536,
+      "unique_nodes": 30,
+      "avg_reuse": 2.3333333333333335,
+      "dedup_advantage_pct": 53.025294624892204
+    },
+    {
+      "n_prompts": 50,
+      "corpus_dedup_ratio": 4.83819152454292,
+      "corpus_dedup_bytes": 21167,
+      "per_prompt_zstd_bytes": 55293,
+      "per_prompt_zstd_ratio": 1.852133181415369,
+      "unique_nodes": 38,
+      "avg_reuse": 3.6842105263157894,
+      "dedup_advantage_pct": 61.71848154377588
+    },
+    {
+      "n_prompts": 100,
+      "corpus_dedup_ratio": 5.44662074307688,
+      "corpus_dedup_bytes": 36147,
+      "per_prompt_zstd_bytes": 106554,
+      "per_prompt_zstd_ratio": 1.847692249938998,
+      "unique_nodes": 50,
+      "avg_reuse": 5.44,
+      "dedup_advantage_pct": 66.076355650656
+    },
+    {
+      "n_prompts": 250,
+      "corpus_dedup_ratio": 6.032715123580983,
+      "corpus_dedup_bytes": 82011,
+      "per_prompt_zstd_bytes": 267765,
+      "per_prompt_zstd_ratio": 1.8476985416316547,
+      "unique_nodes": 77,
+      "avg_reuse": 8.883116883116884,
+      "dedup_advantage_pct": 69.37202397624783
+    },
+    {
+      "n_prompts": 500,
+      "corpus_dedup_ratio": 6.296608693969937,
+      "corpus_dedup_bytes": 155073,
+      "per_prompt_zstd_bytes": 529197,
+      "per_prompt_zstd_ratio": 1.8451238385705135,
+      "unique_nodes": 104,
+      "avg_reuse": 13.01923076923077,
+      "dedup_advantage_pct": 70.69654589878627
+    },
+    {
+      "n_prompts": 1000,
+      "corpus_dedup_ratio": 6.496336690532165,
+      "corpus_dedup_bytes": 299456,
+      "per_prompt_zstd_bytes": 1054700,
+      "per_prompt_zstd_ratio": 1.8444742580828672,
+      "unique_nodes": 126,
+      "avg_reuse": 21.46031746031746,
+      "dedup_advantage_pct": 71.60747131885844
+    },
+    {
+      "n_prompts": 2500,
+      "corpus_dedup_ratio": 6.679786555591828,
+      "corpus_dedup_bytes": 725997,
+      "per_prompt_zstd_bytes": 2629480,
+      "per_prompt_zstd_ratio": 1.8442829000410728,
+      "unique_nodes": 127,
+      "avg_reuse": 53.13385826771653,
+      "dedup_advantage_pct": 72.3900923376485
+    },
+    {
+      "n_prompts": 5000,
+      "corpus_dedup_ratio": 6.759599592848623,
+      "corpus_dedup_bytes": 1441233,
+      "per_prompt_zstd_bytes": 5279897,
+      "per_prompt_zstd_ratio": 1.845141676059211,
+      "unique_nodes": 127,
+      "avg_reuse": 106.54330708661418,
+      "dedup_advantage_pct": 72.70338796381823
+    }
+  ]
+}

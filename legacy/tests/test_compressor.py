@@ -4,6 +4,11 @@ import pytest
 from lopace import PromptCompressor, CompressionMethod
 
 
+def available_methods(compressor):
+    """Return methods available in the current environment for this compressor."""
+    return compressor.available_methods()
+
+
 @pytest.fixture
 def compressor():
     """Create a PromptCompressor instance for testing."""
@@ -56,6 +61,26 @@ class TestTokenCompression:
         assert format_byte in [0, 1]
 
 
+@pytest.mark.skipif(
+    not PromptCompressor().has_lz4,
+    reason="lz4 not installed in this environment"
+)
+class TestLZ4Compression:
+    """Test LZ4 compression/decompression."""
+
+    def test_compress_decompress_lz4(self, compressor, sample_prompt):
+        """Test that LZ4 compression is lossless."""
+        compressed = compressor.compress_lz4(sample_prompt)
+        decompressed = compressor.decompress_lz4(compressed)
+        assert decompressed == sample_prompt
+
+    def test_lz4_compression_method(self, compressor, sample_prompt):
+        """Test generic LZ4 method via the enum."""
+        compressed = compressor.compress(sample_prompt, CompressionMethod.LZ4)
+        decompressed = compressor.decompress(compressed, CompressionMethod.LZ4)
+        assert decompressed == sample_prompt
+
+
 class TestHybridCompression:
     """Test Hybrid compression/decompression."""
     
@@ -95,14 +120,14 @@ class TestGenericMethods:
     
     def test_compress_with_method(self, compressor, sample_prompt):
         """Test generic compress method with all methods."""
-        for method in CompressionMethod:
+        for method in available_methods(compressor):
             compressed = compressor.compress(sample_prompt, method)
             assert isinstance(compressed, bytes)
             assert len(compressed) > 0
     
     def test_decompress_with_method(self, compressor, sample_prompt):
         """Test generic decompress method with all methods."""
-        for method in CompressionMethod:
+        for method in available_methods(compressor):
             compressed = compressor.compress(sample_prompt, method)
             decompressed = compressor.decompress(compressed, method)
             assert decompressed == sample_prompt
@@ -129,7 +154,7 @@ class TestCompressionStats:
         assert 'original_size_tokens' in stats
         assert 'methods' in stats
         
-        assert len(stats['methods']) == 3  # ZSTD, TOKEN, HYBRID
+        assert len(stats['methods']) == len(available_methods(compressor))
         
         for method_name, method_stats in stats['methods'].items():
             assert 'compressed_size_bytes' in method_stats
@@ -153,7 +178,7 @@ class TestEdgeCases:
     
     def test_empty_string(self, compressor):
         """Test compression of empty string."""
-        for method in CompressionMethod:
+        for method in available_methods(compressor):
             compressed = compressor.compress("", method)
             decompressed = compressor.decompress(compressed, method)
             assert decompressed == ""
@@ -176,7 +201,7 @@ class TestEdgeCases:
     
     def test_single_character(self, compressor):
         """Test compression of single character."""
-        for method in CompressionMethod:
+        for method in available_methods(compressor):
             compressed = compressor.compress("a", method)
             decompressed = compressor.decompress(compressed, method)
             assert decompressed == "a"
@@ -184,7 +209,7 @@ class TestEdgeCases:
     def test_unicode_characters(self, compressor):
         """Test compression of unicode characters."""
         unicode_prompt = "你好世界 🌍 مرحبا"
-        for method in CompressionMethod:
+        for method in available_methods(compressor):
             compressed = compressor.compress(unicode_prompt, method)
             decompressed = compressor.decompress(compressed, method)
             assert decompressed == unicode_prompt
