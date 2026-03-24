@@ -3,71 +3,71 @@
     {
       "experiment": "Real: eval_results",
       "metadata": {
-        "n_prompts": 5000,
+        "n_prompts": 93592,
         "source_file": "datasets/eval_results.json",
         "file_size_bytes": 672837942,
-        "mean_prompt_chars": 6605.8476,
-        "median_prompt_chars": 7308,
-        "min_prompt_chars": 18,
-        "max_prompt_chars": 93275,
-        "total_chars": 33029238,
-        "unique_prompts": 4950,
-        "exact_duplicate_pct": 1.0000000000000009,
+        "mean_prompt_chars": 6568.841888195572,
+        "median_prompt_chars": 7119,
+        "min_prompt_chars": 10,
+        "max_prompt_chars": 394578,
+        "total_chars": 614791050,
+        "unique_prompts": 79449,
+        "exact_duplicate_pct": 15.111334302077095,
         "json_field_used": "auto-detected",
         "dataset_type": "real"
       },
       "methods": {
         "zstd": {
           "method": "per_prompt_zstd",
-          "total_original": 33095761,
-          "total_compressed": 10280176,
-          "ratio": 3.2193768861544783,
-          "savings_pct": 68.93808847604382,
-          "time_s": 3.282831907272339
+          "total_original": 616052734,
+          "total_compressed": 190462984,
+          "ratio": 3.234501114400266,
+          "savings_pct": 69.08333110327533,
+          "time_s": 59.10939621925354
         },
         "hybrid": {
           "method": "per_prompt_hybrid",
-          "total_original": 33095761,
-          "total_compressed": 9199476,
-          "ratio": 3.5975702311740365,
-          "savings_pct": 72.20346134358415,
-          "time_s": 79.5856146812439
+          "total_original": 616052734,
+          "total_compressed": 169821010,
+          "ratio": 3.6276591100241364,
+          "savings_pct": 72.43401406607506,
+          "time_s": 1536.2256672382355
         },
         "zstd_dict": {
           "method": "zstd_dictionary",
-          "total_original": 33095761,
-          "total_compressed": 8171808,
-          "total_with_dict_overhead": 8302880,
+          "total_original": 616052734,
+          "total_compressed": 147761976,
+          "total_with_dict_overhead": 147893048,
           "dictionary_size": 131072,
-          "ratio_without_dict": 4.049992486362871,
-          "ratio_with_dict": 3.9860579702464687,
-          "savings_pct": 74.91255753267012,
-          "train_samples": 500,
-          "time_s": 4.486421585083008
+          "ratio_without_dict": 4.169223711518314,
+          "ratio_with_dict": 4.165528686649287,
+          "savings_pct": 75.99344344440487,
+          "train_samples": 9359,
+          "time_s": 85.60793805122375
         },
         "corpus_dedup": {
           "method": "corpus_dedup",
-          "total_original": 33095761,
-          "total_compressed": 14707543,
-          "ratio": 2.250257639906271,
-          "savings_pct": 55.56064415621083,
-          "unique_nodes": 19230,
-          "avg_reuse": 1.0214248569942799,
-          "time_s": 3.368795871734619
+          "total_original": 616052734,
+          "total_compressed": 225266353,
+          "ratio": 2.734774749072268,
+          "savings_pct": 63.43391716852603,
+          "unique_nodes": 296346,
+          "avg_reuse": 1.2589203161169713,
+          "time_s": 67.18398141860962
         },
         "corpus_dedup_chunked": {
           "method": "corpus_dedup_chunked",
-          "total_original": 33095761,
-          "total_compressed": 16031462,
-          "ratio": 2.0644256275566133,
-          "savings_pct": 51.5603765690718,
-          "unique_nodes": 26056,
-          "avg_reuse": 1.0277863064169481,
+          "total_original": 616052734,
+          "total_compressed": 243995264,
+          "ratio": 2.52485529391259,
+          "savings_pct": 60.39376979698624,
+          "unique_nodes": 391833,
+          "avg_reuse": 1.2819032598071116,
           "chunk_config": {
             "min": 128,
             "max": 2048
           },
-          "time_s": 3.6555774211883545
+          "time_s": 90.22405362129211
         }
       }
     }
@@ -82,8 +82,8 @@
       "zstd_ratio": 2.9807926829268294,
       "unique_nodes": 6,
       "avg_reuse": 1.0,
-      "dict_stored": 133464,
-      "dict_ratio": 0.0732557094047833
+      "dict_stored": 133518,
+      "dict_ratio": 0.0732260818766009
     },
     {
       "n": 2,
@@ -94,8 +94,8 @@
       "zstd_ratio": 2.9053404916643117,
       "unique_nodes": 7,
       "avg_reuse": 1.0,
-      "dict_stored": 133627,
-      "dict_ratio": 0.07694552747573469
+      "dict_stored": 133675,
+      "dict_ratio": 0.07691789788666542
     },
     {
       "n": 5,
@@ -106,8 +106,8 @@
       "zstd_ratio": 3.7742448330683627,
       "unique_nodes": 18,
       "avg_reuse": 1.0,
-      "dict_stored": 137160,
-      "dict_ratio": 0.24231554389034704
+      "dict_stored": 137983,
+      "dict_ratio": 0.24087025213250907
     },
     {
       "n": 10,
@@ -118,8 +118,8 @@
       "zstd_ratio": 3.4882553240607144,
       "unique_nodes": 35,
       "avg_reuse": 1.0,
-      "dict_stored": 143507,
-      "dict_ratio": 0.42117109269931086
+      "dict_stored": 144787,
+      "dict_ratio": 0.417447699033753
     },
     {
       "n": 25,
@@ -130,8 +130,8 @@
       "zstd_ratio": 3.27834108712076,
       "unique_nodes": 110,
       "avg_reuse": 1.0,
-      "dict_stored": 167087,
-      "dict_ratio": 0.9868751009952899
+      "dict_stored": 169603,
+      "dict_ratio": 0.9722351609346532
     },
     {
       "n": 50,
@@ -142,8 +142,8 @@
       "zstd_ratio": 2.898246880579105,
       "unique_nodes": 171,
       "avg_reuse": 1.0,
-      "dict_stored": 205412,
-      "dict_ratio": 1.4462592253617121
+      "dict_stored": 210645,
+      "dict_ratio": 1.4103301763630753
     },
     {
       "n": 100,
@@ -154,8 +154,8 @@
       "zstd_ratio": 2.9622092140043144,
       "unique_nodes": 360,
       "avg_reuse": 1.025,
-      "dict_stored": 274474,
-      "dict_ratio": 2.1312874807814217
+      "dict_stored": 283775,
+      "dict_ratio": 2.0614324729098756
     },
     {
       "n": 250,
@@ -166,8 +166,8 @@
       "zstd_ratio": 3.0192923962123954,
       "unique_nodes": 884,
       "avg_reuse": 1.0147058823529411,
-      "dict_stored": 505396,
-      "dict_ratio": 3.1356322566858466
+      "dict_stored": 536395,
+      "dict_ratio": 2.954419783927889
     },
     {
       "n": 500,
@@ -178,8 +178,8 @@
       "zstd_ratio": 3.108582508128669,
       "unique_nodes": 1935,
       "avg_reuse": 1.0165374677002583,
-      "dict_stored": 893459,
-      "dict_ratio": 3.66602720438207
+      "dict_stored": 938804,
+      "dict_ratio": 3.488955096058389
     },
     {
       "n": 1000,
@@ -190,8 +190,8 @@
       "zstd_ratio": 3.140740994482606,
       "unique_nodes": 3841,
       "avg_reuse": 1.0088518614944024,
-      "dict_stored": 1800196,
-      "dict_ratio": 3.7689307164330996
+      "dict_stored": 1807630,
+      "dict_ratio": 3.753430735272152
     },
     {
       "n": 2500,
@@ -202,8 +202,8 @@
       "zstd_ratio": 3.2092474909992945,
       "unique_nodes": 9979,
       "avg_reuse": 1.0255536626916524,
-      "dict_stored": 4285116,
-      "dict_ratio": 3.936353414936725
+      "dict_stored": 4202393,
+      "dict_ratio": 4.01383949573493
     },
     {
       "n": 5000,
@@ -214,8 +214,32 @@
       "zstd_ratio": 3.2193768861544783,
       "unique_nodes": 19230,
       "avg_reuse": 1.0214248569942799,
-      "dict_stored": 8302880,
-      "dict_ratio": 3.9860579702464687
+      "dict_stored": 8080432,
+      "dict_ratio": 4.0957910418650885
+    },
+    {
+      "n": 10000,
+      "orig": 66136847,
+      "dedup_stored": 28505539,
+      "dedup_ratio": 2.3201402015236408,
+      "zstd_stored": 20439441,
+      "zstd_ratio": 3.235746368993164,
+      "unique_nodes": 37531,
+      "avg_reuse": 1.0517438917161812,
+      "dict_stored": 15955689,
+      "dict_ratio": 4.145032345516386
+    },
+    {
+      "n": 93592,
+      "orig": 616052734,
+      "dedup_stored": 225266353,
+      "dedup_ratio": 2.734774749072268,
+      "zstd_stored": 190462984,
+      "zstd_ratio": 3.234501114400266,
+      "unique_nodes": 296346,
+      "avg_reuse": 1.2589203161169713,
+      "dict_stored": 147893048,
+      "dict_ratio": 4.165528686649287
     }
   ]
 }
