@@ -143,26 +143,32 @@ def _apply_delta(source: str, delta: str) -> str:
 
 def _fast_similarity(text_a: str, text_b: str) -> float:
     """
-    Fast approximate similarity using character-level comparison.
-    
-    Uses SequenceMatcher's quick_ratio for speed, falling back
-    to full ratio for candidates above a threshold.
+    Fast similarity using set intersection of line hashes.
+    O(n) instead of O(n²).
     """
     if not text_a or not text_b:
         return 0.0
-    
+
     # Length-based early rejection
     len_ratio = min(len(text_a), len(text_b)) / max(len(text_a), len(text_b))
     if len_ratio < 0.3:
         return 0.0
-    
-    matcher = difflib.SequenceMatcher(None, text_a, text_b, autojunk=True)
-    quick = matcher.quick_ratio()
-    
-    if quick < 0.3:
-        return quick
-    
-    return matcher.ratio()
+
+    # Use line-level Jaccard similarity (very fast)
+    lines_a = set(text_a.split('\n'))
+    lines_b = set(text_b.split('\n'))
+
+    # Remove very short lines (whitespace, empty)
+    lines_a = {l for l in lines_a if len(l.strip()) >= 3}
+    lines_b = {l for l in lines_b if len(l.strip()) >= 3}
+
+    if not lines_a or not lines_b:
+        return 0.0
+
+    intersection = len(lines_a & lines_b)
+    union = len(lines_a | lines_b)
+
+    return intersection / union if union else 0.0
 
 
 class DeltaStore:

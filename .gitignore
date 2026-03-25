@@ -79,3 +79,4 @@ lopace/_version.py
 !screenshots/.gitkeep
 
 eval_results.json
+/datasets

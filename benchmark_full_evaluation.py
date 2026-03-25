@@ -267,6 +267,17 @@ def load_real_dataset(
         (prompts, metadata_dict)
     """
     filepath = Path(filepath)
+
+    # If filepath is a directory, load all files from it
+    if filepath.is_dir():
+        return load_multiple_datasets(
+            str(filepath),
+            json_field=json_field,
+            max_per_file=max_prompts,
+        )
+
+    if not filepath.exists():
+        raise FileNotFoundError(f"Dataset file not found: {filepath}")
     if not filepath.exists():
         raise FileNotFoundError(f"Dataset file not found: {filepath}")
 
@@ -325,20 +336,28 @@ def load_real_dataset(
 
 
 def _load_json_file(filepath: Path) -> Any:
-    """Load JSON or JSONL file."""
+    """Load JSON, JSONL, or Parquet file."""
     suffix = filepath.suffix.lower()
 
-    # Try JSONL first (one JSON object per line)
+    # Parquet support
+    if suffix == '.parquet':
+        try:
+            import pandas as pd
+            df = pd.read_parquet(filepath)
+            return df.to_dict(orient='records')
+        except ImportError:
+            raise ImportError("Install pandas and pyarrow: pip install pandas pyarrow")
+
+    # JSONL
     if suffix in ('.jsonl', '.ndjson'):
         return _load_jsonl(filepath)
 
-    # Try standard JSON
+    # Standard JSON
     try:
         with open(filepath, 'r', encoding='utf-8') as f:
             data = json.load(f)
         return data
     except json.JSONDecodeError:
-        # Might be JSONL with .json extension
         try:
             return _load_jsonl(filepath)
         except Exception:
@@ -600,7 +619,8 @@ def load_multiple_datasets(
     files = sorted(
         glob.glob(str(directory / "*.json")) +
         glob.glob(str(directory / "*.jsonl")) +
-        glob.glob(str(directory / "*.ndjson"))
+        glob.glob(str(directory / "*.ndjson")) +
+        glob.glob(str(directory / "*.parquet"))
     )
 
     if not files:
@@ -990,7 +1010,7 @@ def corpus_dedup_chunked(prompts: List[str], level: int = 15,
 
 def delta_compression_method(prompts: List[str], level: int = 15,
                               similarity_threshold: float = 0.4,
-                              sample_centroids: int = 50) -> Dict:
+                              sample_centroids: int = 20) -> Dict:
     """Delta compression against cluster centroids."""
     from lopace.delta_store import DeltaStore
 
