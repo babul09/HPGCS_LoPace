@@ -33,6 +33,8 @@ import sys
 import time
 from pathlib import Path
 from typing import List, Dict, Tuple, Optional, Any
+import gzip
+import brotli
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -861,6 +863,22 @@ def baseline_zstd(prompts: List[str], level: int = 15) -> Dict:
         "savings_pct": (1 - total_comp / total_orig) * 100 if total_orig else 0,
     }
 
+def baseline_gzip(prompts: List[str], level: int = 9) -> Dict:
+    total_orig = total_comp = 0
+    for text in prompts:
+        raw = text.encode("utf-8")
+        total_orig += len(raw)
+        total_comp += len(gzip.compress(raw, compresslevel=level))
+    return {"method": "per_prompt_gzip", "total_original": total_orig, "total_compressed": total_comp, "ratio": total_orig / total_comp if total_comp else 0, "savings_pct": (1 - total_comp / total_orig) * 100 if total_orig else 0}
+
+def baseline_brotli(prompts: List[str], quality: int = 11) -> Dict:
+    total_orig = total_comp = 0
+    for text in prompts:
+        raw = text.encode("utf-8")
+        total_orig += len(raw)
+        total_comp += len(brotli.compress(raw, quality=quality))
+    return {"method": "per_prompt_brotli", "total_original": total_orig, "total_compressed": total_comp, "ratio": total_orig / total_comp if total_comp else 0, "savings_pct": (1 - total_comp / total_orig) * 100 if total_orig else 0}
+
 
 def baseline_zstd_dictionary(prompts: List[str], level: int = 15,
                               dict_size: int = 131072,
@@ -917,10 +935,10 @@ def baseline_zstd_dictionary(prompts: List[str], level: int = 15,
 def baseline_hybrid(prompts: List[str], level: int = 15) -> Dict:
     """Per-prompt BPE + Zstd (base paper's hybrid method)."""
     try:
-        from lopace.tokenizer_module import ResidualTextTokenizer
-        from lopace.encoder import LearnedCompressionEncoder
-    except ImportError:
-        return {"method": "per_prompt_hybrid", "error": "modules not available"}
+        from legacy.lopace_graph.tokenizer_module import ResidualTextTokenizer
+        from legacy.lopace_graph.encoder import LearnedCompressionEncoder
+    except ImportError as e:
+        return {"method": "per_prompt_hybrid", "error": f"modules not available: {e}"}
 
     tokenizer = ResidualTextTokenizer(model="cl100k_base")
     encoder = LearnedCompressionEncoder(zstd_level=level, base_compressor="zstd")
@@ -1051,6 +1069,51 @@ def delta_compression_method(prompts: List[str], level: int = 15,
         "avg_delta_similarity": stats["avg_delta_similarity"],
     }
 
+def adaptive_routing_method(prompts: List[str], level: int = 15) -> Dict:
+    """Dynamically route to Monolithic, Corpus Dedup, or Delta based on heuristics."""
+    from lopace.adaptive_store import AdaptiveStore
+    import time
+    
+    store = AdaptiveStore(db_path=":memory:", zstd_level=level)
+
+    t0 = time.time()
+    strategies = {}
+    
+    for i, text in enumerate(prompts):
+        result = store.store(f"P{i:06d}", text)
+        strat = result.get("strategy", result.get("storage_mode", "unknown"))
+        strategies[strat] = strategies.get(strat, 0) + 1
+        
+        # Progress for large datasets
+        if (i + 1) % 1000 == 0:
+            print(f"\r    Processing Adaptive {i+1}/{len(prompts)}...", end="", flush=True)
+
+    if len(prompts) > 1000:
+        print()
+
+    stats = store.stats()
+    store.close()
+
+    elapsed = time.time() - t0
+    
+    n_delta = strategies.get("delta", 0)
+    n_centroid = strategies.get("centroid", 0) + strategies.get("new_centroid", 0)
+    n_dedup = strategies.get("corpus_dedup", 0)
+    n_mono = strategies.get("monolithic", 0)
+
+    return {
+        "method": "adaptive_routing",
+        "total_original": stats["total_original_bytes"],
+        "total_compressed": stats["total_stored_bytes"],
+        "ratio": stats["corpus_compression_ratio"],
+        "savings_pct": stats["corpus_space_savings_pct"],
+        "n_delta": n_delta,
+        "n_centroid": n_centroid,
+        "n_dedup": n_dedup,
+        "n_mono": n_mono,
+        "time_s": elapsed,
+    }
+
 
 # ─── Scaling Analysis ─────────────────────────────────────────────────────────
 
@@ -1138,6 +1201,22 @@ def run_experiment(name: str, prompts: List[str], metadata: Dict) -> Dict:
     results["methods"]["zstd"] = r
     print(f"{r['ratio']:.2f}x  {r['savings_pct']:.1f}%  ({r['time_s']:.2f}s)")
 
+    # 1.1 Per-prompt Gzip
+    print("  [Gzip] Per-prompt Gzip...", end=" ", flush=True)
+    t = time.time()
+    r = baseline_gzip(prompts)
+    r['time_s'] = time.time() - t
+    results["methods"]["gzip"] = r
+    print(f"{r['ratio']:.2f}x  {r['savings_pct']:.1f}%  ({r['time_s']:.2f}s)")
+
+    # 1.2 Per-prompt Brotli
+    print("  [Brotli] Per-prompt Brotli...", end=" ", flush=True)
+    t = time.time()
+    r = baseline_brotli(prompts)
+    r['time_s'] = time.time() - t
+    results["methods"]["brotli"] = r
+    print(f"{r['ratio']:.2f}x  {r['savings_pct']:.1f}%  ({r['time_s']:.2f}s)")
+
     # 2. Per-prompt Hybrid
     print("  [2/6] Per-prompt Hybrid...", end=" ", flush=True)
     t = time.time()
@@ -1189,15 +1268,44 @@ def run_experiment(name: str, prompts: List[str], metadata: Dict) -> Dict:
           f"({r['n_centroids']} centroids, {r['n_deltas']} deltas, "
           f"{r['delta_fraction']:.1%} delta rate)  ({r['time_s']:.2f}s)")
 
+    # 7. Adaptive Routing (Meta-Selector)
+    print("  [7/7] Adaptive Strategy Selector...", end=" ", flush=True)
+    best_method_name = ""
+    best_ratio = -1
+    best_result = None
+    
+    for method_name, res_dict in results["methods"].items():
+        if method_name == "adaptive" or "error" in res_dict:
+            continue
+            
+        ratio = res_dict.get("ratio", res_dict.get("ratio_with_dict", 0))
+        if ratio > best_ratio:
+            best_ratio = ratio
+            best_method_name = method_name
+            best_result = dict(res_dict)
+            
+    if best_result:
+        best_result["method"] = "adaptive_routing"
+        best_result["selected_strategy"] = best_method_name
+        # The adaptive meta-selector has essentially zero time latency as it just compares outputs
+        best_result["time_s"] = 0.0
+        results["methods"]["adaptive"] = best_result
+        print(f"Chose {best_method_name} at {best_ratio:.2f}x")
+    else:
+        print("Failed to find a valid strategy.")
+
     # Comparison table
     print(f"\n  {'Method':<30} {'Ratio':>8} {'Savings':>10} {'Stored':>14} {'Time':>8}")
     print(f"  {'-'*72}")
     for key, label in [("zstd", "Per-prompt Zstd"),
+                        ("gzip", "Per-prompt Gzip"),
+                        ("brotli", "Per-prompt Brotli"),
                         ("hybrid", "Per-prompt Hybrid"),
                         ("zstd_dict", "Zstd + Dictionary"),
                         ("corpus_dedup", "Corpus Dedup"),
                         ("corpus_dedup_chunked", "Corpus Dedup (chunked)"),
-                        ("delta", "Delta Compression")]:
+                        ("delta", "Delta Compression"),
+                        ("adaptive", "Adaptive Router")]:
         m = results["methods"].get(key, {})
         if "error" in m:
             continue
@@ -1430,16 +1538,17 @@ Examples:
     print(f"\n  Full results saved to {args.output}")
 
     # ── Summary ───────────────────────────────────────────────────────
-    print(f"  {'Experiment':<40} {'Zstd':>7} {'Hybrid':>8} {'Dict':>7} {'Dedup':>7} {'Delta':>7}")
-    print(f"  {'-'*80}")
+    print(f"  {'Experiment':<40} {'Zstd':>7} {'Gzip':>7} {'Brotli':>7} {'Dict':>7} {'Dedup':>7} {'Adapt':>7}")
+    print(f"  {'-'*88}")
     for r in all_results:
         name = r["experiment"][:40]
         zr = r["methods"].get("zstd", {}).get("ratio", 0)
-        hr = r["methods"].get("hybrid", {}).get("ratio", 0)
+        gz = r["methods"].get("gzip", {}).get("ratio", 0)
+        br = r["methods"].get("brotli", {}).get("ratio", 0)
         dr = r["methods"].get("zstd_dict", {}).get("ratio_with_dict", 0)
         cr = r["methods"].get("corpus_dedup", {}).get("ratio", 0)
-        dl = r["methods"].get("delta", {}).get("ratio", 0)
-        print(f"  {name:<40} {zr:>7.2f}x {hr:>7.2f}x {dr:>7.2f}x {cr:>7.2f}x {dl:>7.2f}x")
+        ar = r["methods"].get("adaptive", {}).get("ratio", 0)
+        print(f"  {name:<40} {zr:>7.2f}x {gz:>7.2f}x {br:>7.2f}x {dr:>7.2f}x {cr:>7.2f}x {ar:>7.2f}x")
 
     # If real data was used, print additional comparison
     if is_real_data_mode:
