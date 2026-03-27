@@ -1,186 +1,169 @@
-# HPGCS / LoPace — Project Changes & Corpus Data Methodology
+# HPGCS / LoPace — Corpus-Aware Prompt Compression
 
-Last updated: 25 March 2026
-
-## Purpose
-
-This document summarizes the major project changes introduced in LoPace v2/HPGCS and explains the **new corpus-aware methodology** for prompt compression using shared corpus data.
+**Author:** Babul Bishwas ([babul09](https://github.com/babul09))
+**Based on:** Original [LoPace](https://github.com/connectaman/LoPace) by Aman Ulla
+**Last updated:** 27 March 2026
 
 ---
 
-## What Changed in the Project
+## Overview
 
-### 1) Architecture evolved from single-prompt compression to a modular pipeline
+HPGCS (Hybrid Prompt Graph Compression System) is a **lossless, corpus-aware prompt compression framework** for LLM prompt workloads. It targets real production scenarios where the same system prompts, tool schemas, and RAG context blocks are repeated across thousands of prompts — exploiting that redundancy to achieve compression ratios far beyond what per-prompt methods can deliver.
 
-The project now includes the HPGCS pipeline (`lopace/hpgcs.py`) with dedicated modules for:
-- parsing (`lopace/parser.py`)
-- graph decomposition + node reuse (`lopace/graph.py`)
-- semantic clustering (`lopace/clustering.py`)
-- tokenization (`lopace/tokenizer_module.py`)
-- backend encoding (`lopace/encoder.py`)
-- persistence (`lopace/storage.py`)
-- reconstruction (`lopace/reconstruction.py`)
+### Three Compression Strategies
 
-### 2) Corpus-level deduplication added as a research extension
+| Strategy | Module | Best For |
+|----------|--------|----------|
+| **Per-prompt compression** | `lopace/compressor.py` | Baseline / single-prompt use |
+| **Corpus-level deduplication** | `lopace/corpus_store.py` | Corpora with shared components |
+| **Delta compression** | `lopace/delta_store.py` | Similar-but-not-identical prompts |
 
-A new content-addressable store (`lopace/corpus_store.py`) was added to support **cross-prompt reuse**:
-- unique component content is stored once
-- each prompt is stored as a compact reconstruction blueprint
-- repeated content across prompts is referenced instead of duplicated
-
-### 3) New corpus-aware APIs in `HPGCS`
-
-`HPGCS` now exposes corpus-centric methods:
-- `compress_corpus(text, prompt_id=None)`
-- `compress_corpus_batch(texts)`
-- `reconstruct_corpus(prompt_id)`
-- `corpus_stats()`
-- `corpus_node_report()`
-
-### 4) Evaluation scripts expanded for corpus experiments
-
-New/updated benchmark tooling compares corpus dedup vs baselines:
-- `benchmark_corpus_dedup.py`
-- `benchmark_full_evaluation.py`
-
-These scripts evaluate reuse rates, dataset size scaling, and real-world-like prompt structure.
+A fourth approach — **Zstd dictionary training** — is available in the benchmark suite (`benchmark_full_evaluation.py`) as a competitive baseline.
 
 ---
 
-## New Methodology: Corpus Data Compression
-
-## Problem with per-prompt compression
-
-Even strong per-prompt compressors (e.g., Zstd/Hybrid) repeatedly compress the same shared sections (system prompts, tool schemas, RAG context) for every prompt.
-
-## Corpus-aware approach
-
-The new method treats a prompt corpus as a shared dataset and separates each prompt into:
-1. **Literal segments** (delimiters/formatting such as `System: `, `User: `)
-2. **Referenceable content segments** (component payloads)
-
-Component payloads are content-hashed (SHA-256) and stored once in `content_nodes`.
-Each prompt stores a compressed **blueprint** in `prompt_blueprints` containing a sequence of literals and references.
-
-### Storage model
-
-- `content_nodes`: unique compressed components + metadata (`ref_count`, sizes, type)
-- `prompt_blueprints`: prompt-level reconstruction plans + original hash + stats
-
-### Compression workflow
-
-1. Parse prompt into lossless segments (`PromptParser.parse_segments`).
-2. For each `ref` segment:
-   - compute content hash
-   - if hash exists: increment `ref_count`
-   - else: compress and insert as new node
-3. Persist compressed blueprint for the prompt.
-4. Return **marginal storage metrics** (bytes newly added for this prompt).
-
-### Reconstruction workflow
-
-1. Load compressed blueprint.
-2. Iterate blueprint sequence:
-   - append literal text directly
-   - resolve referenced node by hash and decompress
-3. Concatenate all parts.
-4. Verify with SHA-256 (`exact_match` / `hash_match`).
-
-This guarantees lossless recovery while enabling corpus-level reuse.
-
----
-
-## Why This Method Improves Results
-
-When reuse exists in the corpus, only the first occurrence pays full storage cost.
-Subsequent prompts often add mostly blueprint bytes, producing strong marginal savings.
-
-Typical high-reuse components in LLM workloads:
-- system instructions
-- tool/function schemas
-- policy blocks
-- repeated retrieval context passages
-
----
-
-## Key Metrics Introduced
-
-### Per-prompt marginal metrics
-- `marginal_bytes`
-- `new_bytes_stored`
-- `reused_refs` / `new_refs`
-- `marginal_ratio`
-- `marginal_savings_pct`
-
-### Corpus-level metrics
-- `n_prompts`
-- `n_unique_nodes`
-- `total_refs`
-- `corpus_stored_bytes`
-- `corpus_compression_ratio`
-- `corpus_space_savings_pct`
-- `storage_overhead_pct` (blueprint overhead)
-
----
-
-## Practical Usage
+## Quick Start
 
 ```python
-from lopace import HPGCS
+from lopace import PromptCompressor, PromptParser, CorpusStore, DeltaStore
 
-hpgcs = HPGCS(db_path=":memory:", zstd_level=15)
+# ── Per-prompt compression (baseline) ──
+compressor = PromptCompressor(zstd_level=15)
+blob = compressor.compress("System: You are helpful.\nUser: Explain entropy.", method="zstd")
+text = compressor.decompress(blob, method="zstd")
 
-# Corpus-aware compression
-r1 = hpgcs.compress_corpus("System: You are helpful.\nUser: Explain entropy.")
-r2 = hpgcs.compress_corpus("System: You are helpful.\nUser: Explain KL divergence.")
+# ── Corpus-level deduplication ──
+parser = PromptParser()
+store = CorpusStore(db_path=":memory:", zstd_level=15)
 
-# Reconstruct one prompt
-text, verify = hpgcs.reconstruct_corpus(r1["prompt_id"])
+prompts = [
+    "System: You are helpful.\nUser: Explain entropy.",
+    "System: You are helpful.\nUser: Explain KL divergence.",
+]
+
+for i, prompt in enumerate(prompts):
+    segments = parser.parse_segments(prompt)
+    result = store.store(f"P{i}", prompt, segments)
+    print(f"Prompt {i}: marginal={result['marginal_bytes']} bytes")
+
+# Reconstruct losslessly
+text, verify = store.retrieve("P0")
 assert verify["exact_match"]
 
-# Corpus analytics
-stats = hpgcs.corpus_stats()
-report = hpgcs.corpus_node_report()
-print(stats["corpus_compression_ratio"], stats["corpus_space_savings_pct"])
+# Corpus-wide stats
+stats = store.corpus_stats()
+print(f"Corpus ratio: {stats['corpus_compression_ratio']:.2f}x")
+print(f"Space savings: {stats['corpus_space_savings_pct']:.1f}%")
 ```
 
 ---
 
-## Methodology Notes and Trade-offs
+## Project Structure
 
-- Best gains appear when prompts share large repeated components.
-- Low-reuse corpora may reduce benefit; blueprint overhead still applies.
-- Node-level dedup improves with corpus size and recurring templates.
-- Hash-based addressing provides deterministic reuse and integrity checks.
+```
+lopace/                         # Core Python package
+  ├── __init__.py               # Public API
+  ├── compressor.py             # Multi-method per-prompt compressor
+  ├── parser.py                 # Structural prompt parser
+  ├── corpus_store.py           # Corpus-level component deduplication
+  └── delta_store.py            # Delta compression (centroid + diffs)
+
+benchmark_corpus_dedup.py       # Corpus dedup vs baselines benchmark
+benchmark_full_evaluation.py    # Full evaluation (synthetic + real data)
+generate_production_dataset.py  # Synthetic dataset generator
+
+legacy/                         # Archived code (graph pipeline, old UIs)
+  ├── lopace_graph/             # HPGCS graph pipeline modules
+  ├── notebooks/                # Old Jupyter notebooks
+  ├── paper/                    # Old paper assets
+  ├── scripts/                  # Old visualization scripts
+  └── tests/                    # Old test suite
+```
 
 ---
 
-## Recommended Evaluation Procedure
-
-1. Run baseline per-prompt compression (Zstd / Hybrid).
-2. Run corpus-aware compression on the same dataset.
-3. Compare:
-   - total bytes stored (not just per-item compressed size)
-   - corpus-level ratio and space savings
-   - reconstruction fidelity (must remain 100%).
-
-Commands:
+## Benchmarking
 
 ```bash
-python benchmark_corpus_dedup.py
+# Corpus dedup vs per-prompt Zstd (synthetic data, fast)
+python benchmark_corpus_dedup.py --n 1000
+
+# Full evaluation with all baselines including Zstd dictionary training
 python benchmark_full_evaluation.py --n 5000
+
+# Real-world dataset evaluation
+python benchmark_full_evaluation.py --real-data dataset.json
+python benchmark_full_evaluation.py --real-data-dir ./datasets/
 ```
 
 ---
 
-## Compatibility
+## Key Metrics
 
-- Legacy API (`PromptCompressor`) remains available.
-- HPGCS standard pipeline remains available.
-- Corpus-aware path is additive and can be used selectively per workload.
+### Per-prompt marginal metrics
+- `marginal_bytes` — bytes added to corpus for this prompt
+- `reused_refs` / `new_refs` — component reuse tracking
+- `marginal_ratio` and `marginal_savings_pct`
+
+### Corpus-level metrics
+- `corpus_compression_ratio` — total original / total stored
+- `corpus_space_savings_pct`
+- `n_unique_nodes` and `avg_refs_per_node`
+- `storage_overhead_pct` — blueprint overhead
 
 ---
 
-## Summary
+## Installation
 
-The project now supports both classic per-prompt compression and a corpus-data methodology that deduplicates shared prompt components across the dataset. This change targets real production LLM workloads where repeated system/tool/context blocks dominate storage cost, while preserving strict lossless reconstruction.
+```bash
+pip install -r requirements.txt
+```
+
+### Dependencies
+
+| Package | Role |
+|---------|------|
+| `zstandard` | Primary compression backend |
+| `lz4` | Fast compression alternative |
+| `brotli` | High-ratio compression |
+| `python-snappy` | Ultra-fast compression |
+| `tiktoken` | BPE tokenization |
+| `networkx` | Graph processing |
+| `numpy` | Numerical operations |
+| `streamlit` | UI apps (optional) |
+| `plotly`, `pandas` | Visualization (optional) |
+
+---
+
+## Methodology
+
+### Corpus-Level Deduplication
+
+1. Parse prompt into lossless segments (`PromptParser.parse_segments`)
+2. Content-hash (SHA-256) each referenceable component
+3. Store unique components once in `content_nodes` table
+4. Store each prompt as a compact reconstruction blueprint
+5. Verify lossless recovery via SHA-256 hash matching
+
+### Delta Compression
+
+1. Group prompts by semantic similarity
+2. Select cluster centroids as reference points
+3. Store deltas (unified diffs) against nearest centroid
+4. Compress deltas with Zstd for additional savings
+5. Reconstruct by applying delta to decompressed centroid
+
+### Zstd Dictionary Training
+
+- Train a shared Zstd dictionary from corpus samples
+- Apply dictionary-assisted compression per prompt
+- Evaluated as a competitive baseline in benchmarks
+
+---
+
+## License
+
+MIT — see [LICENSE](LICENSE)
+
+**Original LoPace:** Copyright © 2026 Aman Ulla
+**HPGCS extensions:** Copyright © 2026 Babul Bishwas

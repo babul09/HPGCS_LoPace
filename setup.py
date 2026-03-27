@@ -11,11 +11,11 @@ with open("requirements.txt", "r", encoding="utf-8") as fh:
 setup(
     name="lopace",
     use_scm_version=True,
-    author="Aman Ulla",
+    author="Babul Bishwas",
     description="Lossless Optimized Prompt Accurate Compression Engine",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/connectaman/LoPace",
+    url="https://github.com/babul09/HPGCS_LoPace",
     packages=find_packages(),
     classifiers=[
         "Development Status :: 4 - Beta",
@@ -34,9 +34,8 @@ setup(
     install_requires=requirements,
     keywords="prompt compression, tokenization, zstd, bpe, nlp, optimization",
     project_urls={
-        "Bug Reports": "https://github.com/connectaman/LoPace/issues",
-        "Source": "https://github.com/connectaman/LoPace",
+        "Bug Reports": "https://github.com/babul09/HPGCS_LoPace/issues",
+        "Source": "https://github.com/babul09/HPGCS_LoPace",
         "PyPI": "https://pypi.org/project/lopace/",
-        "Hugging Face Spaces": "https://huggingface.co/spaces/codewithaman/LoPace",
     },
 )

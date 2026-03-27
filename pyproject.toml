@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.8"
 license = {text = "MIT"}
 authors = [
-    {name = "Aman Ulla"}
+    {name = "Babul Bishwas"}
 ]
 keywords = ["prompt", "compression", "tokenization", "zstd", "bpe", "nlp"]
 classifiers = [
@@ -35,11 +35,10 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/connectaman/LoPace"
-Repository = "https://github.com/connectaman/LoPace"
-Issues = "https://github.com/connectaman/LoPace/issues"
+Homepage = "https://github.com/babul09/HPGCS_LoPace"
+Repository = "https://github.com/babul09/HPGCS_LoPace"
+Issues = "https://github.com/babul09/HPGCS_LoPace/issues"
 "PyPI" = "https://pypi.org/project/lopace/"
-"Hugging Face Spaces" = "https://huggingface.co/spaces/codewithaman/LoPace"
 
 [tool.setuptools_scm]
 version_scheme = "guess-next-dev"

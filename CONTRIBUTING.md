@@ -28,7 +28,7 @@ This project adheres to a Code of Conduct that all contributors are expected to 
 
 3. **Add upstream remote**:
    ```bash
-   git remote add upstream https://github.com/amanulla/lopace.git
+   git remote add upstream https://github.com/babul09/HPGCS_LoPace.git
    ```
 
 4. **Create a branch** for your changes:
@@ -268,8 +268,8 @@ Commit message prefixes:
 
 ## Getting Help
 
-- **Questions?** Open a [Discussion](https://github.com/amanulla/lopace/discussions)
-- **Found a bug?** Open an [Issue](https://github.com/amanulla/lopace/issues)
+- **Questions?** Open a [Discussion](https://github.com/babul09/HPGCS_LoPace/discussions)
+- **Found a bug?** Open an [Issue](https://github.com/babul09/HPGCS_LoPace/issues)
 - **Security issue?** Email the maintainers (see SECURITY.md)
 
 ## Recognition

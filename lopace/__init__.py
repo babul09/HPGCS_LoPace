@@ -1,49 +1,33 @@
 """
-LoPace - Lossless Optimized Prompt Accurate Compression Engine
+LoPace — Lossless Optimized Prompt Accurate Compression Engine
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Version 2 introduces the Hybrid Prompt Graph Compression System (HPGCS),
-a multi-layer pipeline combining structural graph decomposition, semantic
-clustering, BPE tokenization, neural encoding, and Zstandard compression.
+Corpus-aware prompt compression for LLM workloads.
 
-Legacy API (v1) is preserved for backward compatibility.
+Core modules:
+    PromptCompressor    – Multi-method per-prompt compression (zstd, lz4, brotli, etc.)
+    PromptParser        – Structural segmentation into typed components
+    CorpusStore         – Corpus-level component deduplication
+    DeltaStore          – Delta compression via centroids + unified diffs
+
+Author: Babul Bishwas (https://github.com/babul09)
+Based on original LoPace by Aman Ulla
 """
 
-# ── Legacy v1 API ──────────────────────────────────────────────────────────
-from .compressor import PromptCompressor, CompressionMethod
-
-# ── HPGCS v2 API ──────────────────────────────────────────────────────────
-from .hpgcs import HPGCS
-from .parser import PromptParser, ParsedPrompt
-from .graph import PromptGraphDecomposer, ReusableNodeManager, PromptNode, PromptGraph
-from .clustering import VectorSimilarityClusterer, Cluster
-from .tokenizer_module import ResidualTextTokenizer
-from .encoder import LearnedCompressionEncoder
-from .storage import GraphStorageDatabase, PromptRecord
-from .reconstruction import PromptReconstructionEngine
-
-try:
-    from ._version import version as __version__
-except ImportError:
-    __version__ = "2.0.0.dev0"
+from lopace.compressor import PromptCompressor, CompressionMethod
+from lopace.parser import PromptParser, ParsedPrompt
+from lopace.corpus_store import CorpusStore
+from lopace.delta_store import DeltaStore
 
 __all__ = [
-    # v1
+    # Per-prompt compression
     "PromptCompressor",
     "CompressionMethod",
-    # v2 – main entry point
-    "HPGCS",
-    # v2 – individual modules
+    # Structural parsing
     "PromptParser",
     "ParsedPrompt",
-    "PromptGraphDecomposer",
-    "ReusableNodeManager",
-    "PromptNode",
-    "PromptGraph",
-    "VectorSimilarityClusterer",
-    "Cluster",
-    "ResidualTextTokenizer",
-    "LearnedCompressionEncoder",
-    "GraphStorageDatabase",
-    "PromptRecord",
-    "PromptReconstructionEngine",
+    # Corpus-level deduplication
+    "CorpusStore",
+    # Delta compression
+    "DeltaStore",
 ]
