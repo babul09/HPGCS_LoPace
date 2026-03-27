@@ -4,7 +4,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
 
-from benchmark_full_evaluation import generate_corpus, load_real_dataset, run_experiment
+from evaluation.data_generators import generate_corpus
+from evaluation.datasets import load_real_dataset
+from evaluation.runner import run_experiment
 
 app = FastAPI(title="HPGCS Benchmark API")
 
