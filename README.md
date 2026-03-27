@@ -2,118 +2,37 @@
 
 **Author:** Babul Bishwas ([babul09](https://github.com/babul09))
 **Based on:** Original [LoPace](https://github.com/connectaman/LoPace) by Aman Ulla
-**Last updated:** 27 March 2026
+**Last updated:** 28 March 2026
 
 ---
 
 ## Overview
 
-HPGCS (Hybrid Prompt Graph Compression System) is a **lossless, corpus-aware prompt compression framework** for LLM prompt workloads. It targets real production scenarios where the same system prompts, tool schemas, and RAG context blocks are repeated across thousands of prompts — exploiting that redundancy to achieve compression ratios far beyond what per-prompt methods can deliver.
+HPGCS (Hybrid Prompt Graph Compression System) is a **lossless, corpus-aware prompt compression framework** for LLM prompt workloads.
 
-### Three Compression Strategies
+The core objective is to evaluate compression on prompt corpora where reusable structures (system prompts, tool schemas, contextual templates) appear repeatedly, and to compare corpus-aware methods against strong per-prompt baselines under controlled and real-data conditions.
 
-| Strategy | Module | Best For |
-|----------|--------|----------|
-| **Per-prompt compression** | `lopace/compressor.py` | Baseline / single-prompt use |
-| **Corpus-level deduplication** | `lopace/corpus_store.py` | Corpora with shared components |
-| **Delta compression** | `lopace/delta_store.py` | Similar-but-not-identical prompts |
+### Active Compression Tracks
 
-A fourth approach — **Zstd dictionary training** — is available in the benchmark suite (`benchmark_full_evaluation.py`) as a competitive baseline.
+| Track | Module | Purpose |
+|---|---|---|
+| Per-prompt compression | `lopace/compressor.py` | Single-prompt and baseline methods |
+| Corpus-level deduplication | `lopace/corpus_store.py` | Content-addressable reuse across corpora |
+| Delta compression | `lopace/delta_store.py` | Diff-based storage vs centroids |
 
----
+### Comprehensive Baseline Suite (Current)
 
-## Quick Start
+`benchmark_full_evaluation.py` evaluates:
 
-```python
-from lopace import PromptCompressor, PromptParser, CorpusStore, DeltaStore
-
-# ── Per-prompt compression (baseline) ──
-compressor = PromptCompressor(zstd_level=15)
-blob = compressor.compress("System: You are helpful.\nUser: Explain entropy.", method="zstd")
-text = compressor.decompress(blob, method="zstd")
-
-# ── Corpus-level deduplication ──
-parser = PromptParser()
-store = CorpusStore(db_path=":memory:", zstd_level=15)
-
-prompts = [
-    "System: You are helpful.\nUser: Explain entropy.",
-    "System: You are helpful.\nUser: Explain KL divergence.",
-]
-
-for i, prompt in enumerate(prompts):
-    segments = parser.parse_segments(prompt)
-    result = store.store(f"P{i}", prompt, segments)
-    print(f"Prompt {i}: marginal={result['marginal_bytes']} bytes")
-
-# Reconstruct losslessly
-text, verify = store.retrieve("P0")
-assert verify["exact_match"]
-
-# Corpus-wide stats
-stats = store.corpus_stats()
-print(f"Corpus ratio: {stats['corpus_compression_ratio']:.2f}x")
-print(f"Space savings: {stats['corpus_space_savings_pct']:.1f}%")
-```
-
----
-
-## Project Structure
-
-```
-lopace/                         # Core Python package
-  ├── __init__.py               # Public API
-  ├── compressor.py             # Multi-method per-prompt compressor
-  ├── parser.py                 # Structural prompt parser
-  ├── corpus_store.py           # Corpus-level component deduplication
-  └── delta_store.py            # Delta compression (centroid + diffs)
-
-benchmark_corpus_dedup.py       # Corpus dedup vs baselines benchmark
-benchmark_full_evaluation.py    # Full evaluation (synthetic + real data)
-generate_production_dataset.py  # Synthetic dataset generator
-
-legacy/                         # Archived code (graph pipeline, old UIs)
-  ├── lopace_graph/             # HPGCS graph pipeline modules
-  ├── notebooks/                # Old Jupyter notebooks
-  ├── paper/                    # Old paper assets
-  ├── scripts/                  # Old visualization scripts
-  └── tests/                    # Old test suite
-```
-
----
-
-## Benchmarking
-
-```bash
-# Corpus dedup vs per-prompt Zstd (synthetic data, fast)
-python benchmark_corpus_dedup.py --n 1000
-
-# Full evaluation with comprehensive baselines:
-# - Brotli quality sweep (Q1/Q5/Q9/Q11)
-# - gzip/DEFLATE level sweep (L1/L6/L9)
-# - Hybrid cascades (Brotli→Zstd, Zstd→LZ4HC)
-# - Zstd dictionary training
-python benchmark_full_evaluation.py --n 5000
-
-# Real-world dataset evaluation
-python benchmark_full_evaluation.py --real-data dataset.json
-python benchmark_full_evaluation.py --real-data-dir ./datasets/
-```
-
----
-
-## Key Metrics
-
-### Per-prompt marginal metrics
-- `marginal_bytes` — bytes added to corpus for this prompt
-- `reused_refs` / `new_refs` — component reuse tracking
-- `marginal_ratio` and `marginal_savings_pct`
-
-### Corpus-level metrics
-- `corpus_compression_ratio` — total original / total stored
-- `corpus_space_savings_pct`
-- `n_unique_nodes` and `avg_refs_per_node`
-- `storage_overhead_pct` — blueprint overhead
+- Per-prompt Zstd
+- gzip/DEFLATE sweep (`L1`, `L6`, `L9`)
+- Brotli quality sweep (`Q1`, `Q5`, `Q9`, `Q11`)
+- Hybrid cascades (`Brotli→Zstd`, `Zstd→LZ4HC` variants)
+- Per-prompt Hybrid (BPE + Zstd)
+- Zstd dictionary training (with and without dictionary-overhead views)
+- Corpus Dedup (standard + chunked)
+- Delta compression
+- Adaptive strategy selector (best method by measured ratio)
 
 ---
 
@@ -123,45 +42,124 @@ python benchmark_full_evaluation.py --real-data-dir ./datasets/
 pip install -r requirements.txt
 ```
 
-### Dependencies
+Frontend:
 
-| Package | Role |
-|---------|------|
-| `zstandard` | Primary compression backend |
-| `lz4` | Fast compression alternative |
-| `brotli` | High-ratio compression |
-| `python-snappy` | Ultra-fast compression |
-| `tiktoken` | BPE tokenization |
-| `networkx` | Graph processing |
-| `numpy` | Numerical operations |
-| `streamlit` | UI apps (optional) |
-| `plotly`, `pandas` | Visualization (optional) |
+```bash
+cd frontend
+npm install
+```
 
 ---
 
-## Methodology
+## Quick Start (Python API)
 
-### Corpus-Level Deduplication
+```python
+from lopace import PromptCompressor, PromptParser, CorpusStore
 
-1. Parse prompt into lossless segments (`PromptParser.parse_segments`)
-2. Content-hash (SHA-256) each referenceable component
-3. Store unique components once in `content_nodes` table
-4. Store each prompt as a compact reconstruction blueprint
-5. Verify lossless recovery via SHA-256 hash matching
+compressor = PromptCompressor(zstd_level=15)
+blob = compressor.compress("System: You are helpful.\nUser: Explain entropy.", method="zstd")
+text = compressor.decompress(blob, method="zstd")
 
-### Delta Compression
+parser = PromptParser()
+store = CorpusStore(db_path=":memory:", zstd_level=15)
 
-1. Group prompts by semantic similarity
-2. Select cluster centroids as reference points
-3. Store deltas (unified diffs) against nearest centroid
-4. Compress deltas with Zstd for additional savings
-5. Reconstruct by applying delta to decompressed centroid
+prompt = "System: You are helpful.\nUser: Explain KL divergence."
+segments = parser.parse_segments(prompt)
+result = store.store("P0", prompt, segments)
+rebuilt, verify = store.retrieve("P0")
 
-### Zstd Dictionary Training
+assert verify["exact_match"]
+print(result["marginal_bytes"], store.corpus_stats()["corpus_compression_ratio"])
+```
 
-- Train a shared Zstd dictionary from corpus samples
-- Apply dictionary-assisted compression per prompt
-- Evaluated as a competitive baseline in benchmarks
+---
+
+## Running Benchmarks
+
+### Synthetic Benchmark Suite
+
+```bash
+python benchmark_full_evaluation.py --n 5000 --output evaluation_results.json --csv scaling_results.csv
+```
+
+### Real Dataset Benchmark
+
+```bash
+python benchmark_full_evaluation.py --real-data datasets/eval_results.json --max-prompts 1000 --output benchmark_results.json --csv scaling_results_real.csv
+```
+
+### Combined Real + Synthetic (research-friendly)
+
+```bash
+python benchmark_full_evaluation.py \
+  --real-data datasets/eval_results.json \
+  --max-prompts 200 \
+  --include-synthetic \
+  --n 100 \
+  --output research_results_2026_03_28.json \
+  --csv research_scaling_2026_03_28.csv
+```
+
+This command also writes a real-data scaling CSV:
+
+- `research_scaling_2026_03_28_real_eval_results.csv`
+
+---
+
+## Frontend / API
+
+### Start API
+
+```bash
+python -m uvicorn serve_api:app --host 0.0.0.0 --port 8000 --reload
+```
+
+### Start Frontend
+
+```bash
+cd frontend
+npm run dev
+```
+
+Dev port is pinned to `5174`.
+
+### File-driven Benchmark View
+
+The Benchmarks page loads result JSON files via:
+
+- `GET /api/benchmark-results?path=<json_file>`
+
+You can select:
+
+- run type (`all`, `synthetic`, `real`)
+- specific experiment
+- dictionary metric view (`with overhead` vs `without overhead`)
+
+---
+
+## Metrics Interpretation
+
+- `ratio = total_original / total_stored`
+- `savings_pct = (1 - total_stored / total_original) * 100`
+- Dictionary mode reports both:
+  - `ratio_without_dict` (raw compression only)
+  - `ratio_with_dict` (includes dictionary payload)
+
+Negative dictionary savings can occur when dictionary overhead is larger than gains (common on small or low-reuse samples).
+
+---
+
+## Repository Structure
+
+```text
+lopace/                         # Active compression package
+evaluation/                     # Benchmark methods and runners
+benchmark_full_evaluation.py    # Main end-to-end evaluation script
+serve_api.py                    # FastAPI backend for demo/benchmarks UI
+frontend/                       # React + Vite app (file-driven benchmark views)
+datasets/                       # Real-world and synthetic corpus inputs
+legacy/                         # Archived graph pipeline and historical assets
+```
 
 ---
 

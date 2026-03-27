@@ -1,0 +1,491 @@
+{
+  "experiments": [
+    {
+      "experiment": "Real: eval_results",
+      "metadata": {
+        "n_prompts": 2000,
+        "source_file": "datasets/eval_results.json",
+        "file_size_bytes": 672837942,
+        "mean_prompt_chars": 6704.576,
+        "median_prompt_chars": 7339,
+        "min_prompt_chars": 18,
+        "max_prompt_chars": 93275,
+        "total_chars": 13409152,
+        "unique_prompts": 1983,
+        "exact_duplicate_pct": 0.8499999999999952,
+        "json_field_used": "auto-detected",
+        "dataset_type": "real"
+      },
+      "methods": {
+        "zstd": {
+          "method": "per_prompt_zstd",
+          "total_original": 13433635,
+          "total_compressed": 4183600,
+          "ratio": 3.211022803327278,
+          "savings_pct": 68.85727504134212,
+          "time_s": 1.0251286029815674
+        },
+        "gzip_sweep": {
+          "method": "gzip_level_sweep",
+          "levels": [
+            1,
+            6,
+            9
+          ],
+          "runs": [
+            {
+              "method": "per_prompt_gzip",
+              "level": 1,
+              "total_original": 13433635,
+              "total_compressed": 6123607,
+              "ratio": 2.193745451006245,
+              "savings_pct": 54.4158598919801,
+              "time_s": 0.05769777297973633
+            },
+            {
+              "method": "per_prompt_gzip",
+              "level": 6,
+              "total_original": 13433635,
+              "total_compressed": 4284780,
+              "ratio": 3.135198306564164,
+              "savings_pct": 68.10409096272156,
+              "time_s": 0.1302037239074707
+            },
+            {
+              "method": "per_prompt_gzip",
+              "level": 9,
+              "total_original": 13433635,
+              "total_compressed": 4302801,
+              "ratio": 3.1220674625668257,
+              "savings_pct": 67.96994261046991,
+              "time_s": 0.1866753101348877
+            }
+          ],
+          "best": {
+            "method": "per_prompt_gzip",
+            "level": 6,
+            "total_original": 13433635,
+            "total_compressed": 4284780,
+            "ratio": 3.135198306564164,
+            "savings_pct": 68.10409096272156,
+            "time_s": 0.1302037239074707
+          },
+          "time_s": 0.37459874153137207
+        },
+        "gzip": {
+          "method": "per_prompt_gzip",
+          "level": 6,
+          "total_original": 13433635,
+          "total_compressed": 4284780,
+          "ratio": 3.135198306564164,
+          "savings_pct": 68.10409096272156,
+          "time_s": 0.1302037239074707
+        },
+        "brotli_sweep": {
+          "method": "brotli_quality_sweep",
+          "qualities": [
+            1,
+            5,
+            9,
+            11
+          ],
+          "runs": [
+            {
+              "method": "per_prompt_brotli",
+              "quality": 1,
+              "total_original": 13433635,
+              "total_compressed": 4867077,
+              "ratio": 2.7601032406103294,
+              "savings_pct": 63.76947118185063,
+              "time_s": 0.06069016456604004
+            },
+            {
+              "method": "per_prompt_brotli",
+              "quality": 5,
+              "total_original": 13433635,
+              "total_compressed": 3965310,
+              "ratio": 3.3877893531653265,
+              "savings_pct": 70.48222614355683,
+              "time_s": 0.24000048637390137
+            },
+            {
+              "method": "per_prompt_brotli",
+              "quality": 9,
+              "total_original": 13433635,
+              "total_compressed": 3952735,
+              "ratio": 3.3985670681186573,
+              "savings_pct": 70.57583446327074,
+              "time_s": 0.3310267925262451
+            },
+            {
+              "method": "per_prompt_brotli",
+              "quality": 11,
+              "total_original": 13433635,
+              "total_compressed": 3360638,
+              "ratio": 3.9973466347758966,
+              "savings_pct": 74.98340545950519,
+              "time_s": 10.250380039215088
+            }
+          ],
+          "best": {
+            "method": "per_prompt_brotli",
+            "quality": 11,
+            "total_original": 13433635,
+            "total_compressed": 3360638,
+            "ratio": 3.9973466347758966,
+            "savings_pct": 74.98340545950519,
+            "time_s": 10.250380039215088
+          },
+          "time_s": 10.882118225097656
+        },
+        "brotli": {
+          "method": "per_prompt_brotli",
+          "quality": 11,
+          "total_original": 13433635,
+          "total_compressed": 3360638,
+          "ratio": 3.9973466347758966,
+          "savings_pct": 74.98340545950519,
+          "time_s": 10.250380039215088
+        },
+        "cascade_sweep": {
+          "method": "hybrid_cascade_sweep",
+          "runs": [
+            {
+              "method": "cascade_brotli11_to_zstd15",
+              "cascade": [
+                [
+                  "brotli",
+                  {
+                    "quality": 11
+                  }
+                ],
+                [
+                  "zstd",
+                  {
+                    "level": 15
+                  }
+                ]
+              ],
+              "total_original": 13433635,
+              "total_compressed": 3380575,
+              "ratio": 3.973772213306908,
+              "savings_pct": 74.83499440024983,
+              "time_s": 10.586695194244385
+            },
+            {
+              "method": "cascade_brotli9_to_zstd9",
+              "cascade": [
+                [
+                  "brotli",
+                  {
+                    "quality": 9
+                  }
+                ],
+                [
+                  "zstd",
+                  {
+                    "level": 9
+                  }
+                ]
+              ],
+              "total_original": 13433635,
+              "total_compressed": 3972686,
+              "ratio": 3.3814993180936024,
+              "savings_pct": 70.42731918799342,
+              "time_s": 0.41571521759033203
+            },
+            {
+              "method": "cascade_zstd15_to_lz4hc12",
+              "cascade": [
+                [
+                  "zstd",
+                  {
+                    "level": 15
+                  }
+                ],
+                [
+                  "lz4hc",
+                  {
+                    "level": 12
+                  }
+                ]
+              ],
+              "total_original": 13433635,
+              "total_compressed": 4213589,
+              "ratio": 3.1881692780192847,
+              "savings_pct": 68.63403687832816,
+              "time_s": 1.0259993076324463
+            },
+            {
+              "method": "cascade_zstd9_to_lz4hc9",
+              "cascade": [
+                [
+                  "zstd",
+                  {
+                    "level": 9
+                  }
+                ],
+                [
+                  "lz4hc",
+                  {
+                    "level": 9
+                  }
+                ]
+              ],
+              "total_original": 13433635,
+              "total_compressed": 4277846,
+              "ratio": 3.1402801783888434,
+              "savings_pct": 68.15570766959203,
+              "time_s": 0.30538034439086914
+            }
+          ],
+          "best": {
+            "method": "cascade_brotli11_to_zstd15",
+            "cascade": [
+              [
+                "brotli",
+                {
+                  "quality": 11
+                }
+              ],
+              [
+                "zstd",
+                {
+                  "level": 15
+                }
+              ]
+            ],
+            "total_original": 13433635,
+            "total_compressed": 3380575,
+            "ratio": 3.973772213306908,
+            "savings_pct": 74.83499440024983,
+            "time_s": 10.586695194244385
+          },
+          "time_s": 12.333811044692993
+        },
+        "cascade": {
+          "method": "cascade_brotli11_to_zstd15",
+          "cascade": [
+            [
+              "brotli",
+              {
+                "quality": 11
+              }
+            ],
+            [
+              "zstd",
+              {
+                "level": 15
+              }
+            ]
+          ],
+          "total_original": 13433635,
+          "total_compressed": 3380575,
+          "ratio": 3.973772213306908,
+          "savings_pct": 74.83499440024983,
+          "time_s": 10.586695194244385
+        },
+        "hybrid": {
+          "method": "per_prompt_hybrid",
+          "total_original": 13433635,
+          "total_compressed": 3725710,
+          "ratio": 3.6056577135633208,
+          "savings_pct": 72.26580891917935,
+          "time_s": 24.097636222839355
+        },
+        "zstd_dict": {
+          "method": "zstd_dictionary",
+          "total_original": 13433635,
+          "total_compressed": 3334466,
+          "total_with_dict_overhead": 3465538,
+          "dictionary_size": 131072,
+          "ratio_without_dict": 4.028721540420565,
+          "ratio_with_dict": 3.876349069033437,
+          "savings_pct": 74.20252969505276,
+          "train_samples": 200,
+          "time_s": 1.3348956108093262
+        },
+        "corpus_dedup": {
+          "method": "corpus_dedup",
+          "total_original": 13433635,
+          "total_compressed": 6590142,
+          "ratio": 2.038443936412903,
+          "savings_pct": 50.942972620590034,
+          "unique_nodes": 14066,
+          "avg_reuse": 1.058012228067681,
+          "time_s": 1.0949416160583496
+        },
+        "corpus_dedup_chunked": {
+          "method": "corpus_dedup_chunked",
+          "total_original": 13433635,
+          "total_compressed": 6801559,
+          "ratio": 1.97508174228879,
+          "savings_pct": 49.36918414115018,
+          "unique_nodes": 15987,
+          "avg_reuse": 1.078876587227122,
+          "chunk_config": {
+            "min": 128,
+            "max": 2048
+          },
+          "time_s": 1.0762543678283691
+        },
+        "delta": {
+          "method": "delta_compression",
+          "total_original": 13433635,
+          "total_compressed": 4184496,
+          "ratio": 3.2103352470644015,
+          "savings_pct": 68.85060521593746,
+          "n_centroids": 1997,
+          "n_deltas": 3,
+          "delta_fraction": 0.0015,
+          "avg_delta_similarity": 0.5871910112359551,
+          "time_s": 2.013627767562866
+        },
+        "adaptive": {
+          "method": "adaptive_routing",
+          "quality": 11,
+          "total_original": 13433635,
+          "total_compressed": 3360638,
+          "ratio": 3.9973466347758966,
+          "savings_pct": 74.98340545950519,
+          "time_s": 0.0,
+          "selected_strategy": "brotli"
+        }
+      }
+    }
+  ],
+  "scaling": [
+    {
+      "n": 1,
+      "orig": 9777,
+      "dedup_stored": 5371,
+      "dedup_ratio": 1.8203314094209644,
+      "zstd_stored": 3280,
+      "zstd_ratio": 2.9807926829268294,
+      "unique_nodes": 12,
+      "avg_reuse": 1.0,
+      "dict_stored": 133156,
+      "dict_ratio": 0.07342515545675748
+    },
+    {
+      "n": 2,
+      "orig": 10282,
+      "dedup_stored": 5806,
+      "dedup_ratio": 1.7709266276265931,
+      "zstd_stored": 3539,
+      "zstd_ratio": 2.9053404916643117,
+      "unique_nodes": 14,
+      "avg_reuse": 1.0,
+      "dict_stored": 133308,
+      "dict_ratio": 0.07712965463438053
+    },
+    {
+      "n": 5,
+      "orig": 33236,
+      "dedup_stored": 17341,
+      "dedup_ratio": 1.9166138054322126,
+      "zstd_stored": 8806,
+      "zstd_ratio": 3.7742448330683627,
+      "unique_nodes": 34,
+      "avg_reuse": 1.0294117647058822,
+      "dict_stored": 136086,
+      "dict_ratio": 0.2442279147009979
+    },
+    {
+      "n": 10,
+      "orig": 60441,
+      "dedup_stored": 31287,
+      "dedup_ratio": 1.9318247195320741,
+      "zstd_stored": 17327,
+      "zstd_ratio": 3.4882553240607144,
+      "unique_nodes": 67,
+      "avg_reuse": 1.0149253731343284,
+      "dict_stored": 141263,
+      "dict_ratio": 0.4278615065516094
+    },
+    {
+      "n": 25,
+      "orig": 164894,
+      "dedup_stored": 86209,
+      "dedup_ratio": 1.9127237295409991,
+      "zstd_stored": 50298,
+      "zstd_ratio": 3.27834108712076,
+      "unique_nodes": 210,
+      "avg_reuse": 1.0095238095238095,
+      "dict_stored": 161091,
+      "dict_ratio": 1.023607774487712
+    },
+    {
+      "n": 50,
+      "orig": 297079,
+      "dedup_stored": 156985,
+      "dedup_ratio": 1.8924037328407173,
+      "zstd_stored": 102503,
+      "zstd_ratio": 2.898246880579105,
+      "unique_nodes": 329,
+      "avg_reuse": 1.006079027355623,
+      "dict_stored": 190610,
+      "dict_ratio": 1.5585698546770894
+    },
+    {
+      "n": 100,
+      "orig": 584983,
+      "dedup_stored": 307327,
+      "dedup_ratio": 1.9034546265053185,
+      "zstd_stored": 197482,
+      "zstd_ratio": 2.9622092140043144,
+      "unique_nodes": 677,
+      "avg_reuse": 1.0251107828655834,
+      "dict_stored": 252989,
+      "dict_ratio": 2.3122863049381595
+    },
+    {
+      "n": 250,
+      "orig": 1584736,
+      "dedup_stored": 807249,
+      "dedup_ratio": 1.9631315740248672,
+      "zstd_stored": 524870,
+      "zstd_ratio": 3.0192923962123954,
+      "unique_nodes": 1651,
+      "avg_reuse": 1.0218049666868565,
+      "dict_stored": 503265,
+      "dict_ratio": 3.1489096201802234
+    },
+    {
+      "n": 500,
+      "orig": 3275445,
+      "dedup_stored": 1655813,
+      "dedup_ratio": 1.9781491025858597,
+      "zstd_stored": 1053678,
+      "zstd_ratio": 3.108582508128669,
+      "unique_nodes": 3505,
+      "avg_reuse": 1.029957203994294,
+      "dict_stored": 925858,
+      "dict_ratio": 3.537740128615835
+    },
+    {
+      "n": 1000,
+      "orig": 6784814,
+      "dedup_stored": 3387470,
+      "dedup_ratio": 2.002914859762596,
+      "zstd_stored": 2160259,
+      "zstd_ratio": 3.140740994482606,
+      "unique_nodes": 7019,
+      "avg_reuse": 1.0266419717908535,
+      "dict_stored": 1838040,
+      "dict_ratio": 3.6913309830036343
+    },
+    {
+      "n": 2000,
+      "orig": 13433635,
+      "dedup_stored": 6590142,
+      "dedup_ratio": 2.038443936412903,
+      "zstd_stored": 4183600,
+      "zstd_ratio": 3.211022803327278,
+      "unique_nodes": 14066,
+      "avg_reuse": 1.058012228067681,
+      "dict_stored": 3465538,
+      "dict_ratio": 3.876349069033437
+    }
+  ]
+}
