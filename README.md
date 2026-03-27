@@ -1,4 +1,4 @@
-# HPGCS / LoPace — Corpus-Aware Prompt Compression
+# HPGCS Benchmark Lab — Corpus-Aware Prompt Compression
 
 **Author:** Babul Bishwas ([babul09](https://github.com/babul09))
 **Based on:** Original [LoPace](https://github.com/connectaman/LoPace) by Aman Ulla
@@ -11,6 +11,8 @@
 HPGCS (Hybrid Prompt Graph Compression System) is a **lossless, corpus-aware prompt compression framework** for LLM prompt workloads.
 
 The core objective is to evaluate compression on prompt corpora where reusable structures (system prompts, tool schemas, contextual templates) appear repeatedly, and to compare corpus-aware methods against strong per-prompt baselines under controlled and real-data conditions.
+
+This repository now serves as both a compression framework and a reproducible benchmark lab for cross-method evaluation.
 
 ### Active Compression Tracks
 
@@ -33,6 +35,15 @@ The core objective is to evaluate compression on prompt corpora where reusable s
 - Corpus Dedup (standard + chunked)
 - Delta compression
 - Adaptive strategy selector (best method by measured ratio)
+
+### Latest Techniques in Use
+
+- **Quality/level sweeps** for Brotli and gzip/DEFLATE to avoid single-point baseline bias.
+- **Hybrid cascades** to test sequential compression pipelines (`Brotli→Zstd`, `Zstd→LZ4HC`).
+- **Adaptive router** that selects the empirically best method for each experiment.
+- **Dictionary dual reporting** (`with overhead` vs `without overhead`) for deployment-realistic interpretation.
+- **File-driven benchmark frontend** that parses stored result JSON files and supports experiment/run-type filtering.
+- **Real-data scaling by prompt caps** (`200`, `1000`, `2000`, `5000`) for controlled growth analysis.
 
 ---
 
@@ -88,6 +99,15 @@ python benchmark_full_evaluation.py --n 5000 --output evaluation_results.json --
 python benchmark_full_evaluation.py --real-data datasets/eval_results.json --max-prompts 1000 --output benchmark_results.json --csv scaling_results_real.csv
 ```
 
+### Real Dataset Prompt-Cap Series (Recommended)
+
+```bash
+python benchmark_full_evaluation.py --real-data datasets/eval_results.json --max-prompts 200  --output research_real_200.json  --csv research_real_scaling_200.csv
+python benchmark_full_evaluation.py --real-data datasets/eval_results.json --max-prompts 1000 --output research_real_1000.json --csv research_real_scaling_1000.csv
+python benchmark_full_evaluation.py --real-data datasets/eval_results.json --max-prompts 2000 --output research_real_2000.json --csv research_real_scaling_2000.csv
+python benchmark_full_evaluation.py --real-data datasets/eval_results.json --max-prompts 5000 --output research_real_5000.json --csv research_real_scaling_5000.csv
+```
+
 ### Combined Real + Synthetic (research-friendly)
 
 ```bash
@@ -103,6 +123,10 @@ python benchmark_full_evaluation.py \
 This command also writes a real-data scaling CSV:
 
 - `research_scaling_2026_03_28_real_eval_results.csv`
+
+For a full research summary generated from these artifacts, see:
+
+- `RESEARCH_RESULTS_2026_03_28.md`
 
 ---
 
@@ -134,6 +158,8 @@ You can select:
 - run type (`all`, `synthetic`, `real`)
 - specific experiment
 - dictionary metric view (`with overhead` vs `without overhead`)
+
+This lets you compare experiments produced in separate runs (for example, different real-data prompt caps) without modifying code.
 
 ---
 

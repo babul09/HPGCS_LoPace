@@ -1,30 +1,29 @@
-# PROJECT CONTEXT — HPGCS / LoPace
+# PROJECT CONTEXT — HPGCS Benchmark Lab / LoPace
 
 **Author:** Babul Bishwas (babul09)
 **Based on:** Original LoPace by Aman Ulla
-**Last updated:** 27 March 2026
+**Last updated:** 28 March 2026
 
 ---
 
 ## 1. Project Purpose
 
-HPGCS is a **lossless, corpus-aware prompt compression framework** for LLM prompt
-workloads. It exploits the structural redundancy in production prompt corpora —
-where system instructions, tool schemas, and RAG context blocks are repeated
-across thousands of prompts — to achieve compression ratios far beyond per-prompt
-methods.
+HPGCS is a **lossless, corpus-aware prompt compression framework and benchmark lab** for LLM prompt workloads.
 
-### Research Focus Areas
+Current emphasis is not only compression methods, but also reproducible, multi-baseline benchmarking across synthetic and real prompt corpora with clear reporting and frontend visualization.
+
+### Active Research Focus Areas
 
 1. **Corpus-level component deduplication** (`lopace/corpus_store.py`)
 2. **Delta compression** (`lopace/delta_store.py`)
-3. **Zstd dictionary training** (in benchmark suite)
+3. **Per-prompt baselines at scale** (Zstd/gzip/Brotli)
+4. **Zstd dictionary training with overhead-aware interpretation**
+5. **Hybrid cascades** (`Brotli→Zstd`, `Zstd→LZ4HC`)
+6. **Adaptive strategy selection** (best measured ratio per experiment)
 
 ### Legacy (archived)
 
-The original HPGCS graph pipeline (parse → graph → nodes → clustering →
-tokenize → encode → store → reconstruct) was evaluated but did not produce
-significant compression gains. Its code is preserved in `legacy/lopace_graph/`.
+The original graph pipeline (parse → graph → nodes → clustering → tokenize → encode → store → reconstruct) is preserved in `legacy/lopace_graph/` for reference.
 
 ---
 
@@ -32,188 +31,144 @@ significant compression gains. Its code is preserved in `legacy/lopace_graph/`.
 
 ### `lopace/compressor.py` — Per-Prompt Compressor
 
-The `PromptCompressor` class provides multi-method per-prompt compression.
+`PromptCompressor` supports multiple codecs and token workflows:
 
-**Available methods** (enum `CompressionMethod`):
-- `zstd` — Zstandard (primary, configurable level 1–22)
-- `lz4` — LZ4 (fast)
-- `brotli` — Brotli (high ratio)
-- `snappy` — Snappy (ultra-fast)
-- `gzip`, `deflate`, `lzma` — stdlib options
-- `token` — BPE tokenization only (tiktoken → binary pack)
-- `hybrid` — BPE + Zstd (tokenize → pack → compress)
+- `zstd`, `gzip`, `deflate`, `lzma`, `lz4`, `brotli`, `snappy`
+- `token` (BPE packing)
+- `hybrid` (BPE + Zstd)
 
-**Key APIs:**
+Key API shape:
+
 ```python
 compressor = PromptCompressor(model="cl100k_base", zstd_level=15)
 blob = compressor.compress(text, method)
 text = compressor.decompress(blob, method)
-results = compressor.compare_all(text)  # benchmark all methods
+results = compressor.compare_all(text)
 ```
 
-### `lopace/parser.py` — Structural Parser
+### `lopace/parser.py` — Structural Prompt Parser
 
-The `PromptParser` class segments prompts by role delimiters.
+Provides role-aware segmentation used by corpus dedup:
 
-**Two parsing modes:**
-1. `parse(text)` → `ParsedPrompt` with typed components (system, user, instruction, context, other)
-2. `parse_segments(text)` → list of `{"type": "literal"|"ref", "content": ..., "component_type": ...}` for corpus dedup
+- `parse(text)` for typed prompt structure
+- `parse_segments(text)` / `parse_segments_chunked(...)` for dedup references
 
-**Recognized delimiters:** `System:`, `User:`, `Instruction:`, `Context:`, `Tool:`, `Assistant:`
+### `lopace/corpus_store.py` — Corpus Dedup Store
 
-### `lopace/corpus_store.py` — Corpus-Level Deduplication
+Content-addressable storage over parsed prompt components:
 
-The `CorpusStore` class implements content-addressable storage for prompt corpora.
+1. Parse into referenceable segments
+2. Hash components (SHA-256)
+3. Reuse existing component nodes when possible
+4. Compress new payloads with Zstd
+5. Store prompt blueprints for deterministic reconstruction
 
-**How it works:**
-1. Parse prompt into lossless segments (`parser.parse_segments`)
-2. SHA-256 hash each referenceable content segment
-3. If hash exists → increment `ref_count` (zero marginal cost)
-4. If new → compress with Zstd and insert as `content_node`
-5. Store compact reconstruction blueprint for the prompt
+Primary APIs:
 
-**Storage model (SQLite):**
-- `content_nodes`: `{content_hash, compressed_data, original_size, compressed_size, component_type, ref_count}`
-- `prompt_blueprints`: `{prompt_id, original_hash, blueprint (JSON), original_size, marginal_bytes}`
-
-**Key APIs:**
 ```python
 store = CorpusStore(db_path=":memory:", zstd_level=15)
-result = store.store(prompt_id, text, segments)  # returns marginal metrics
-text, verify = store.retrieve(prompt_id)          # lossless reconstruction
-stats = store.corpus_stats()                      # corpus-wide metrics
-report = store.node_report()                      # per-node breakdown
+result = store.store(prompt_id, text, segments)
+text, verify = store.retrieve(prompt_id)
+stats = store.corpus_stats()
 ```
-
-**Marginal metrics per prompt:**
-- `marginal_bytes` — total bytes newly added for this prompt
-- `new_bytes_stored` — new content node bytes
-- `blueprint_bytes` — blueprint overhead
-- `reused_refs` / `new_refs` — component reuse tracking
-- `marginal_ratio`, `marginal_savings_pct`
 
 ### `lopace/delta_store.py` — Delta Compression
 
-The `DeltaStore` class stores prompts as diffs against cluster centroids.
-
-**How it works:**
-1. Incoming prompt is compared against existing centroids (configurable similarity threshold)
-2. If similar enough → compute unified diff against centroid, compress the delta
-3. If no match → store as new centroid (full text, compressed)
-4. Reconstruct by decompressing centroid + applying patch
-
-**Key APIs:**
-```python
-ds = DeltaStore(db_path=":memory:", zstd_level=15, similarity_threshold=0.7)
-result = ds.store(prompt_id, text)
-text, verify = ds.retrieve(prompt_id)
-stats = ds.corpus_stats()
-```
-
-**Storage model (SQLite):**
-- `centroids`: `{centroid_id, compressed_text, original_size, compressed_size}`
-- `deltas`: `{prompt_id, centroid_id, compressed_delta, original_size, delta_size, similarity}`
+Stores prompts against centroids when similarity threshold is met, otherwise stores as new centroid. Retrieval verifies round-trip integrity.
 
 ---
 
-## 3. Evaluation Scripts
+## 3. Evaluation System
 
-### `benchmark_corpus_dedup.py`
-Focused comparison of three methods:
-1. Per-prompt Zstd (baseline)
-2. Per-prompt Hybrid / BPE+Zstd (original paper's best)
-3. Corpus-level component dedup (proposed method)
+### `evaluation/baselines.py`
 
-Also includes scaling analysis (compression ratio vs corpus size).
+Implements baseline and sweep/cascade logic:
+
+- Per-prompt Zstd
+- gzip level sweep (`L1`, `L6`, `L9`)
+- Brotli quality sweep (`Q1`, `Q5`, `Q9`, `Q11`)
+- Hybrid cascades (`Brotli→Zstd`, `Zstd→LZ4HC` variants)
+- Zstd dictionary training (`ratio_without_dict`, `ratio_with_dict`)
+- Corpus dedup / chunked dedup / delta / adaptive routing
+
+### `evaluation/runner.py`
+
+Runs all methods for each experiment, stores sweep details, emits best baseline variants, and computes an adaptive best-of-methods result.
 
 ### `benchmark_full_evaluation.py`
-Comprehensive evaluation (~1500 lines) supporting:
-- **Synthetic data** with controllable reuse rates (0%–100%)
-- **Real-world datasets** (JSON, JSONL, NDJSON, Parquet)
-- Format auto-detection (ShareGPT, Alpaca, OpenAI messages)
-- **Four methods:** per-prompt Zstd, per-prompt Hybrid, Zstd with dictionary training, corpus dedup
-- Scaling analysis, redundancy analysis, CSV/JSON export
 
-**Usage:**
-```bash
-python benchmark_full_evaluation.py --n 5000
-python benchmark_full_evaluation.py --real-data dataset.json
-python benchmark_full_evaluation.py --real-data-dir ./datasets/
-```
+Current end-to-end benchmark entrypoint:
 
-### `generate_production_dataset.py`
-Generates a realistic 1500-prompt dataset simulating 3 LLM applications:
-1. Customer support bot (high system prompt reuse)
-2. Code review assistant (shared tools, unique code)
-3. RAG research assistant (shared contexts, unique queries)
+- Synthetic scenarios: standard reuse, full reuse, low reuse, zero reuse, zero reuse + tools/context
+- Real datasets: JSON/JSONL with format auto-detection
+- Redundancy analysis and scaling exports
+- JSON + CSV artifact generation
 
 ---
 
-## 4. Dependencies
+## 4. Frontend / API Benchmark Workflow
 
-**Core (required):**
-- `zstandard >= 0.22.0` — Primary compression backend
-- `lz4 >= 4.3.3` — Fast compression
-- `brotli >= 1.1.0` — High-ratio compression
-- `python-snappy >= 0.7.1` — Ultra-fast compression
-- `tiktoken >= 0.5.0` — BPE tokenization
+### Backend (`serve_api.py`)
 
-**Analysis (required for benchmarks):**
-- `networkx >= 3.0` — Graph processing
-- `numpy >= 1.24.0` — Numerical operations
+- `POST /api/benchmark` runs experiments from UI parameters
+- `GET /api/benchmark-results?path=...` loads stored result JSON files from workspace
 
-**Visualization (optional):**
-- `streamlit >= 1.28.0` — Web UI
-- `plotly >= 5.0.0` — Interactive charts
-- `pandas >= 1.5.0` — DataFrames
+### Frontend (`frontend/`)
+
+- Vite dev port pinned to `5174`
+- Benchmarks page is **file-driven** (path input + run-type + experiment filtering)
+- Dictionary metrics can be toggled between:
+  - with overhead (deployment realistic)
+  - without overhead (raw compression view)
 
 ---
 
-## 5. Project File Map
+## 5. Current Research Artifacts
 
-```
-lopace/                         # Active Python package
-  ├── __init__.py               # Public API exports
-  ├── compressor.py             # Multi-method per-prompt compressor (701 lines)
-  ├── parser.py                 # Structural prompt parser (282 lines)
-  ├── corpus_store.py           # Corpus-level component dedup (375 lines)
-  └── delta_store.py            # Delta compression (497 lines)
+Primary outputs generated in current workflow:
 
-benchmark_corpus_dedup.py       # Corpus dedup benchmark (571 lines)
-benchmark_full_evaluation.py    # Full evaluation suite (1498 lines)
-generate_production_dataset.py  # Synthetic dataset generator (257 lines)
+- `RESEARCH_RESULTS_2026_03_28.md`
+- `research_results_2026_03_28.json`
+- `research_scaling_2026_03_28.csv`
 
-pyproject.toml                  # Package metadata
-setup.py                        # Setuptools config
-requirements.txt                # Dependencies
-LICENSE                         # MIT license
-README.md                       # Project README
+Real-data prompt-cap artifacts:
 
-legacy/                         # Archived code
-  ├── lopace_graph/             # Graph pipeline modules (7 files)
-  │   ├── hpgcs.py              # Pipeline orchestrator
-  │   ├── graph.py              # Graph decomposition + node reuse
-  │   ├── clustering.py         # Semantic clustering
-  │   ├── tokenizer_module.py   # BPE tokenizer module
-  │   ├── encoder.py            # Learned compression encoder
-  │   ├── storage.py            # Graph storage database
-  │   └── reconstruction.py     # Graph-based reconstruction
-  ├── hpgcs_app.py              # Streamlit app (graph pipeline)
-  ├── streamlit_app.py          # Streamlit app (v1 compressor)
-  ├── verify_hpgcs.py           # Graph pipeline smoke test
-  ├── notebooks/                # Old Jupyter notebooks
-  ├── paper/                    # Old paper assets
-  ├── scripts/                  # Old visualization scripts
-  └── tests/                    # Old test suite
-```
+- `research_real_200.json`
+- `research_real_1000.json`
+- `research_real_2000.json`
+- `research_real_5000.json`
+
+Real-data scaling artifacts:
+
+- `research_real_scaling_200_real_eval_results.csv`
+- `research_real_scaling_1000_real_eval_results.csv`
+- `research_real_scaling_2000_real_eval_results.csv`
+- `research_real_scaling_5000_real_eval_results.csv`
 
 ---
 
-## 6. Losslessness Guarantee
+## 6. Dependencies (Operationally Relevant)
 
-All compression paths guarantee lossless reconstruction:
-- **Corpus store:** SHA-256 hash of original text stored with blueprint; verified on retrieval
-- **Delta store:** SHA-256 hash stored with each delta record; verified on patch
-- **Compressor:** Direct byte-level round-trip (compress → decompress → assert equal)
+Core compression stack:
 
-Verification is embedded in both the stores and the benchmark scripts.
+- `zstandard`, `brotli`, `lz4`, `python-snappy`, `tiktoken`
+
+Benchmark/runtime support:
+
+- `numpy`, `networkx`
+
+UI/API stack:
+
+- `fastapi`, `uvicorn`, React + Vite frontend
+
+---
+
+## 7. Losslessness Guarantee
+
+All active compression paths are lossless:
+
+- Corpus dedup validates reconstruction against stored original hash
+- Delta store verifies reconstructed prompts
+- Per-prompt compressor methods are round-trip checked in method-specific paths
+
+Benchmark scripts include reconstruction assertions during runs.
