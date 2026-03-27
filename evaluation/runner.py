@@ -6,9 +6,9 @@ import zstandard as zstd
 from lopace.parser import PromptParser
 from lopace.corpus_store import CorpusStore
 from .baselines import (
-    baseline_zstd, baseline_gzip, baseline_brotli, baseline_zstd_dictionary,
+    baseline_zstd, baseline_gzip_levels, baseline_brotli_qualities, baseline_zstd_dictionary,
     baseline_hybrid, corpus_dedup_method, corpus_dedup_chunked,
-    delta_compression_method, adaptive_routing_method
+    delta_compression_method, adaptive_routing_method, baseline_hybrid_cascades
 )
 
 # ─── Scaling Analysis ─────────────────────────────────────────────────────────
@@ -97,21 +97,53 @@ def run_experiment(name: str, prompts: List[str], metadata: Dict) -> Dict:
     results["methods"]["zstd"] = r
     print(f"{r['ratio']:.2f}x  {r['savings_pct']:.1f}%  ({r['time_s']:.2f}s)")
 
-    # 1.1 Per-prompt Gzip
-    print("  [Gzip] Per-prompt Gzip...", end=" ", flush=True)
+    # 1.1 Per-prompt Gzip/DEFLATE levels
+    print("  [Gzip] Gzip/DEFLATE level sweep (1,6,9)...", end=" ", flush=True)
     t = time.time()
-    r = baseline_gzip(prompts)
-    r['time_s'] = time.time() - t
-    results["methods"]["gzip"] = r
-    print(f"{r['ratio']:.2f}x  {r['savings_pct']:.1f}%  ({r['time_s']:.2f}s)")
+    gzip_sweep = baseline_gzip_levels(prompts, levels=(1, 6, 9))
+    gzip_sweep["time_s"] = time.time() - t
+    results["methods"]["gzip_sweep"] = gzip_sweep
+    best_gzip = gzip_sweep.get("best", {})
+    results["methods"]["gzip"] = best_gzip
+    if best_gzip:
+        print(
+            f"best L{best_gzip.get('level', '?')}: {best_gzip.get('ratio', 0):.2f}x  "
+            f"{best_gzip.get('savings_pct', 0):.1f}%  ({gzip_sweep['time_s']:.2f}s total)"
+        )
+    else:
+        print("no valid gzip result")
 
-    # 1.2 Per-prompt Brotli
-    print("  [Brotli] Per-prompt Brotli...", end=" ", flush=True)
+    # 1.2 Per-prompt Brotli quality levels
+    print("  [Brotli] Brotli quality sweep (1,5,9,11)...", end=" ", flush=True)
     t = time.time()
-    r = baseline_brotli(prompts)
-    r['time_s'] = time.time() - t
-    results["methods"]["brotli"] = r
-    print(f"{r['ratio']:.2f}x  {r['savings_pct']:.1f}%  ({r['time_s']:.2f}s)")
+    brotli_sweep = baseline_brotli_qualities(prompts, qualities=(1, 5, 9, 11))
+    brotli_sweep["time_s"] = time.time() - t
+    results["methods"]["brotli_sweep"] = brotli_sweep
+    best_brotli = brotli_sweep.get("best", {})
+    results["methods"]["brotli"] = best_brotli
+    if best_brotli:
+        print(
+            f"best Q{best_brotli.get('quality', '?')}: {best_brotli.get('ratio', 0):.2f}x  "
+            f"{best_brotli.get('savings_pct', 0):.1f}%  ({brotli_sweep['time_s']:.2f}s total)"
+        )
+    else:
+        print("no valid brotli result")
+
+    # 1.3 Hybrid cascades
+    print("  [Cascade] Brotli→Zstd / Zstd→LZ4HC sweeps...", end=" ", flush=True)
+    t = time.time()
+    cascade_sweep = baseline_hybrid_cascades(prompts)
+    cascade_sweep["time_s"] = time.time() - t
+    results["methods"]["cascade_sweep"] = cascade_sweep
+    best_cascade = cascade_sweep.get("best", {})
+    results["methods"]["cascade"] = best_cascade
+    if best_cascade:
+        print(
+            f"best {best_cascade.get('method', 'cascade')}: {best_cascade.get('ratio', 0):.2f}x  "
+            f"{best_cascade.get('savings_pct', 0):.1f}%  ({cascade_sweep['time_s']:.2f}s total)"
+        )
+    else:
+        print("no valid cascade result")
 
     # 2. Per-prompt Hybrid
     print("  [2/6] Per-prompt Hybrid...", end=" ", flush=True)
@@ -194,8 +226,9 @@ def run_experiment(name: str, prompts: List[str], metadata: Dict) -> Dict:
     print(f"\n  {'Method':<30} {'Ratio':>8} {'Savings':>10} {'Stored':>14} {'Time':>8}")
     print(f"  {'-'*72}")
     for key, label in [("zstd", "Per-prompt Zstd"),
-                        ("gzip", "Per-prompt Gzip"),
-                        ("brotli", "Per-prompt Brotli"),
+                        ("gzip", "Per-prompt Gzip (best)"),
+                        ("brotli", "Per-prompt Brotli (best)"),
+                        ("cascade", "Hybrid Cascade (best)"),
                         ("hybrid", "Per-prompt Hybrid"),
                         ("zstd_dict", "Zstd + Dictionary"),
                         ("corpus_dedup", "Corpus Dedup"),

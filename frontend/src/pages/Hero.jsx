@@ -11,9 +11,9 @@ export default function Hero() {
           Lossless Corpus-Aware Prompt Compression for LLM Workloads
         </h2>
         <p className="body-large" style={{ marginBottom: '2.5rem', color: 'var(--md-sys-color-secondary)' }}>
-          Exploiting structural redundancy in production prompt corpora — where system instructions, 
-          tool schemas, and RAG context blocks repeat across thousands of prompts — to achieve 
-          compression ratios far beyond per-prompt methods.
+          Exploiting structural redundancy in production prompt corpora — where system instructions,
+          tool schemas, and RAG context blocks repeat across thousands of prompts — while providing
+          comprehensive baseline comparisons (Brotli quality sweeps, gzip/DEFLATE levels, and hybrid cascades).
         </p>
         
         <div className="hero-actions">
@@ -53,30 +53,30 @@ export default function Hero() {
           <div className="feature-icon-wrapper">
             <BookOpen size={32} />
           </div>
-          <h3 className="feature-title">Zstd Dictionary</h3>
+          <h3 className="feature-title">Comprehensive Baselines</h3>
           <p className="body-large">
-            Train highly-optimized shared dictionaries from your specific corpus samples 
-            to dramatically boost dictionary-assisted per-prompt baseline compression.
+            Compare Brotli quality levels, gzip/DEFLATE levels, and hybrid cascades
+            like Brotli→Zstd and Zstd→LZ4HC across synthetic and real corpora.
           </p>
         </div>
       </section>
 
       <section className="stats-banner">
         <div className="stat-item">
-          <h3>70.2%</h3>
-          <p>Less storage vs Zstd</p>
+          <h3>5.38×</h3>
+          <p>Corpus Dedup ratio (latest synthetic standard)</p>
         </div>
         <div className="stat-item">
-          <h3>83.9%</h3>
-          <p>Absolute space savings</p>
+          <h3>2.47×</h3>
+          <p>Brotli best ratio (Q11)</p>
         </div>
         <div className="stat-item">
           <h3>100%</h3>
           <p>Lossless guarantee</p>
         </div>
         <div className="stat-item">
-          <h3>6.21×</h3>
-          <p>Mean compression ratio</p>
+          <h3>2.43×</h3>
+          <p>Best cascade ratio (Brotli11→Zstd15)</p>
         </div>
       </section>
     </div>

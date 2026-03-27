@@ -3,6 +3,7 @@ import { PlayCircle, ShieldCheck, AlertCircle, Database, Settings2 } from 'lucid
 
 export default function Demo() {
   const [mode, setMode] = useState('synthetic'); // 'synthetic' or 'real'
+  const [dictOverheadMode, setDictOverheadMode] = useState('with');
   const [compressing, setCompressing] = useState(false);
   const [results, setResults] = useState(null);
   const [error, setError] = useState(null);
@@ -57,14 +58,30 @@ export default function Demo() {
       case 'zstd': return 'Per-prompt Zstd';
       case 'gzip': return 'Per-prompt Gzip';
       case 'brotli': return 'Per-prompt Brotli';
+      case 'cascade': return 'Hybrid Cascade';
       case 'hybrid': return 'Per-prompt Hybrid';
-      case 'zstd_dict': return 'Zstd + Dictionary';
+      case 'zstd_dict': return `Zstd + Dictionary (${dictOverheadMode === 'with' ? 'with' : 'without'} overhead)`;
+      case 'zstd_dictionary': return `Zstd + Dictionary (${dictOverheadMode === 'with' ? 'with' : 'without'} overhead)`;
       case 'corpus_dedup': return 'Corpus Dedup';
       case 'corpus_dedup_chunked': return 'Chunked Dedup';
       case 'delta': return 'Delta Compression';
       case 'adaptive': return 'Adaptive Router';
       default: return key;
     }
+  };
+
+  const renderSweepRows = (runs, levelKey, ratioLabel) => {
+    if (!Array.isArray(runs) || runs.length === 0) return null;
+
+    return runs.map((entry, idx) => (
+      <tr key={idx} style={{ borderBottom: '1px solid var(--md-sys-color-outline-variant)' }}>
+        <td style={{ padding: '0.6rem 0.75rem' }}>{entry[levelKey] ?? '-'}</td>
+        <td style={{ padding: '0.6rem 0.75rem' }}>{Number(entry.ratio ?? 0).toFixed(2)}x</td>
+        <td style={{ padding: '0.6rem 0.75rem' }}>{Number(entry.savings_pct ?? 0).toFixed(2)}%</td>
+        <td style={{ padding: '0.6rem 0.75rem' }}>{Number(entry.time_s ?? 0).toFixed(2)}s</td>
+        <td style={{ padding: '0.6rem 0.75rem', color: 'var(--md-sys-color-secondary)' }}>{ratioLabel(entry)}</td>
+      </tr>
+    ));
   };
 
   return (
@@ -93,6 +110,18 @@ export default function Demo() {
             >
               <Database size={18} style={{marginRight: '0.5rem'}}/> Real Host File
             </button>
+          </div>
+
+          <div style={{ marginBottom: '1rem' }}>
+            <label className="label-large" style={{ display: 'block', marginBottom: '0.5rem' }}>Dictionary metric view</label>
+            <select
+              value={dictOverheadMode}
+              onChange={(e) => setDictOverheadMode(e.target.value)}
+              style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--md-sys-color-outline-variant)', background: 'var(--md-sys-color-surface)', color: 'var(--md-sys-color-on-surface)' }}
+            >
+              <option value="with">With overhead (deployment realistic)</option>
+              <option value="without">Without overhead (raw compression only)</option>
+            </select>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
@@ -219,8 +248,31 @@ export default function Demo() {
                  
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem', marginBottom: '2rem' }}>
                     {Object.entries(results.methods)
-                      .map(([key, res]) => (
-                      <div key={key} style={{ 
+                      .filter(([key]) => !key.endsWith('_sweep'))
+                      .map(([key, res]) => {
+                      const selectedStrategy = res.selected_strategy;
+                      const isDictionaryResult = key === 'zstd_dict'
+                        || key === 'zstd_dictionary'
+                        || (key === 'adaptive' && ['zstd_dict', 'zstd_dictionary'].includes(selectedStrategy));
+
+                      const totalOriginal = Number(res.total_original ?? 0);
+                      const totalCompressed = Number(res.total_compressed ?? 0);
+                      const totalWithOverhead = Number(res.total_with_dict_overhead ?? totalCompressed);
+                      const displayStored = isDictionaryResult
+                        ? (dictOverheadMode === 'with' ? totalWithOverhead : totalCompressed)
+                        : Number(res.total_compressed ?? res.total_with_dict_overhead ?? 0);
+                      const displayRatio = isDictionaryResult
+                        ? Number(
+                          dictOverheadMode === 'with'
+                            ? (res.ratio_with_dict ?? (displayStored ? totalOriginal / displayStored : 0))
+                            : (res.ratio_without_dict ?? (displayStored ? totalOriginal / displayStored : 0))
+                        )
+                        : Number(res.ratio ?? res.ratio_with_dict ?? 0);
+                      const displaySavings = isDictionaryResult
+                        ? Number(totalOriginal ? (1 - displayStored / totalOriginal) * 100 : 0)
+                        : Number(res.savings_pct ?? 0);
+
+                      return (<div key={key} style={{ 
                          background: ['corpus_dedup', 'corpus_dedup_chunked', 'adaptive'].includes(key) ? 'var(--md-sys-color-surface-container-highest)' : 'var(--md-sys-color-surface-container)', 
                          border: ['corpus_dedup', 'corpus_dedup_chunked', 'adaptive'].includes(key) ? '2px solid var(--md-sys-color-primary)' : '1px solid var(--md-sys-color-outline-variant)',
                          padding: '1.5rem', borderRadius: 'var(--md-sys-shape-corner-medium)' 
@@ -235,13 +287,18 @@ export default function Demo() {
                         ) : (
                           <>
                             <h3 style={{ margin: '1rem 0', fontSize: '2rem', color: 'var(--md-sys-color-on-surface)' }}>
-                               {(res.ratio || res.ratio_with_dict || 0).toFixed(2)}x
+                             {displayRatio.toFixed(2)}x
                             </h3>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', fontSize: '0.85rem', color: 'var(--md-sys-color-on-surface-variant)'}}>
-                               <p><strong>Savings:</strong> {res.savings_pct.toFixed(2)}%</p>
-                               <p><strong>Stored Bytes:</strong> {(res.total_compressed || res.total_with_dict_overhead).toLocaleString()}</p>
-                               <p><strong>Time:</strong> {res.time_s.toFixed(2)} s</p>
+                             <p><strong>Savings:</strong> {displaySavings.toFixed(2)}%</p>
+                             <p><strong>Stored Bytes:</strong> {displayStored.toLocaleString()}</p>
+                             <p><strong>Time:</strong> {Number(res.time_s ?? 0).toFixed(2)} s</p>
                                {res.dictionary_size && <p><strong>Dict:</strong> {res.dictionary_size} b</p>}
+                               {res.ratio_without_dict && <p><strong>Ratio (no overhead):</strong> {Number(res.ratio_without_dict).toFixed(2)}x</p>}
+                               {res.ratio_with_dict && <p><strong>Ratio (with overhead):</strong> {Number(res.ratio_with_dict).toFixed(2)}x</p>}
+                               {(isDictionaryResult && displaySavings < 0) && (
+                                 <p style={{ color: 'var(--md-sys-color-outline)' }}><strong>Note:</strong> Negative savings here means dictionary overhead is larger than compression gain for this run.</p>
+                               )}
                                {res.unique_nodes && <p><strong>Nodes:</strong> {res.unique_nodes}</p>}
                                {res.n_deltas && <p><strong>Deltas:</strong> {res.n_deltas}</p>}
                                {key === 'adaptive' && res.selected_strategy && (
@@ -253,8 +310,94 @@ export default function Demo() {
                           </>
                         )}
                       </div>
-                    ))}
+                    )})}
                  </div>
+
+                 {(results.methods.gzip_sweep || results.methods.brotli_sweep || results.methods.cascade_sweep) && (
+                   <div className="material-card" style={{ marginTop: '0.5rem', background: 'var(--md-sys-color-surface-container-high)', padding: '1rem' }}>
+                     <h3 className="headline-large" style={{ marginBottom: '1rem' }}>Sweep Details</h3>
+
+                     {results.methods.gzip_sweep?.runs?.length > 0 && (
+                       <div style={{ marginBottom: '1.25rem' }}>
+                         <p className="label-large" style={{ marginBottom: '0.5rem' }}>Gzip/DEFLATE Levels</p>
+                         <div style={{ overflowX: 'auto' }}>
+                           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                             <thead>
+                               <tr style={{ background: 'var(--md-sys-color-surface-container-highest)' }}>
+                                 <th style={{ textAlign: 'left', padding: '0.6rem 0.75rem' }}>Level</th>
+                                 <th style={{ textAlign: 'left', padding: '0.6rem 0.75rem' }}>Ratio</th>
+                                 <th style={{ textAlign: 'left', padding: '0.6rem 0.75rem' }}>Savings</th>
+                                 <th style={{ textAlign: 'left', padding: '0.6rem 0.75rem' }}>Time</th>
+                                 <th style={{ textAlign: 'left', padding: '0.6rem 0.75rem' }}>Note</th>
+                               </tr>
+                             </thead>
+                             <tbody>
+                               {renderSweepRows(results.methods.gzip_sweep.runs, 'level', (entry) =>
+                                 entry.level === results.methods.gzip_sweep?.best?.level ? 'best' : ''
+                               )}
+                             </tbody>
+                           </table>
+                         </div>
+                       </div>
+                     )}
+
+                     {results.methods.brotli_sweep?.runs?.length > 0 && (
+                       <div style={{ marginBottom: '1.25rem' }}>
+                         <p className="label-large" style={{ marginBottom: '0.5rem' }}>Brotli Qualities</p>
+                         <div style={{ overflowX: 'auto' }}>
+                           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                             <thead>
+                               <tr style={{ background: 'var(--md-sys-color-surface-container-highest)' }}>
+                                 <th style={{ textAlign: 'left', padding: '0.6rem 0.75rem' }}>Quality</th>
+                                 <th style={{ textAlign: 'left', padding: '0.6rem 0.75rem' }}>Ratio</th>
+                                 <th style={{ textAlign: 'left', padding: '0.6rem 0.75rem' }}>Savings</th>
+                                 <th style={{ textAlign: 'left', padding: '0.6rem 0.75rem' }}>Time</th>
+                                 <th style={{ textAlign: 'left', padding: '0.6rem 0.75rem' }}>Note</th>
+                               </tr>
+                             </thead>
+                             <tbody>
+                               {renderSweepRows(results.methods.brotli_sweep.runs, 'quality', (entry) =>
+                                 entry.quality === results.methods.brotli_sweep?.best?.quality ? 'best' : ''
+                               )}
+                             </tbody>
+                           </table>
+                         </div>
+                       </div>
+                     )}
+
+                     {results.methods.cascade_sweep?.runs?.length > 0 && (
+                       <div>
+                         <p className="label-large" style={{ marginBottom: '0.5rem' }}>Hybrid Cascades</p>
+                         <div style={{ overflowX: 'auto' }}>
+                           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                             <thead>
+                               <tr style={{ background: 'var(--md-sys-color-surface-container-highest)' }}>
+                                 <th style={{ textAlign: 'left', padding: '0.6rem 0.75rem' }}>Cascade</th>
+                                 <th style={{ textAlign: 'left', padding: '0.6rem 0.75rem' }}>Ratio</th>
+                                 <th style={{ textAlign: 'left', padding: '0.6rem 0.75rem' }}>Savings</th>
+                                 <th style={{ textAlign: 'left', padding: '0.6rem 0.75rem' }}>Time</th>
+                                 <th style={{ textAlign: 'left', padding: '0.6rem 0.75rem' }}>Status</th>
+                               </tr>
+                             </thead>
+                             <tbody>
+                               {results.methods.cascade_sweep.runs.map((entry, idx) => (
+                                 <tr key={idx} style={{ borderBottom: '1px solid var(--md-sys-color-outline-variant)' }}>
+                                   <td style={{ padding: '0.6rem 0.75rem' }}>{String(entry.method || '').replace('cascade_', '')}</td>
+                                   <td style={{ padding: '0.6rem 0.75rem' }}>{Number(entry.ratio ?? 0).toFixed(2)}x</td>
+                                   <td style={{ padding: '0.6rem 0.75rem' }}>{Number(entry.savings_pct ?? 0).toFixed(2)}%</td>
+                                   <td style={{ padding: '0.6rem 0.75rem' }}>{Number(entry.time_s ?? 0).toFixed(2)}s</td>
+                                   <td style={{ padding: '0.6rem 0.75rem', color: entry.error ? 'var(--md-sys-color-error)' : 'var(--md-sys-color-secondary)' }}>
+                                     {entry.error ? 'unavailable' : (entry.method === results.methods.cascade_sweep?.best?.method ? 'best' : 'ok')}
+                                   </td>
+                                 </tr>
+                               ))}
+                             </tbody>
+                           </table>
+                         </div>
+                       </div>
+                     )}
+                   </div>
+                 )}
 
               </div>
             )}

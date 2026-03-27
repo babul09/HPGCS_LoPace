@@ -274,17 +274,18 @@ Examples:
     print(f"\n  Full results saved to {args.output}")
 
     # ── Summary ───────────────────────────────────────────────────────
-    print(f"  {'Experiment':<40} {'Zstd':>7} {'Gzip':>7} {'Brotli':>7} {'Dict':>7} {'Dedup':>7} {'Adapt':>7}")
-    print(f"  {'-'*88}")
+    print(f"  {'Experiment':<40} {'Zstd':>7} {'Gzip':>7} {'Brotli':>7} {'Cascade':>8} {'Dict':>7} {'Dedup':>7} {'Adapt':>7}")
+    print(f"  {'-'*98}")
     for r in all_results:
         name = r["experiment"][:40]
         zr = r["methods"].get("zstd", {}).get("ratio", 0)
         gz = r["methods"].get("gzip", {}).get("ratio", 0)
         br = r["methods"].get("brotli", {}).get("ratio", 0)
+        ca = r["methods"].get("cascade", {}).get("ratio", 0)
         dr = r["methods"].get("zstd_dict", {}).get("ratio_with_dict", 0)
         cr = r["methods"].get("corpus_dedup", {}).get("ratio", 0)
         ar = r["methods"].get("adaptive", {}).get("ratio", 0)
-        print(f"  {name:<40} {zr:>7.2f}x {gz:>7.2f}x {br:>7.2f}x {dr:>7.2f}x {cr:>7.2f}x {ar:>7.2f}x")
+        print(f"  {name:<40} {zr:>7.2f}x {gz:>7.2f}x {br:>7.2f}x {ca:>8.2f}x {dr:>7.2f}x {cr:>7.2f}x {ar:>7.2f}x")
 
     # If real data was used, print additional comparison
     if is_real_data_mode:

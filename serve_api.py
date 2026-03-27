@@ -1,4 +1,6 @@
 import time
+import json
+from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -9,6 +11,7 @@ from evaluation.datasets import load_real_dataset
 from evaluation.runner import run_experiment
 
 app = FastAPI(title="HPGCS Benchmark API")
+WORKSPACE_ROOT = Path(__file__).resolve().parent
 
 app.add_middleware(
     CORSMiddleware,
@@ -63,6 +66,40 @@ async def execute_benchmark(req: BenchmarkRequest):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/benchmark-results")
+async def load_benchmark_results(path: str = "evaluation_results.json"):
+    try:
+        candidate = Path(path).expanduser()
+        if not candidate.is_absolute():
+            candidate = WORKSPACE_ROOT / candidate
+        candidate = candidate.resolve()
+
+        root = WORKSPACE_ROOT.resolve()
+        if candidate != root and root not in candidate.parents:
+            raise HTTPException(status_code=400, detail="Path must be inside the project workspace.")
+
+        if candidate.suffix.lower() != ".json":
+            raise HTTPException(status_code=400, detail="Only .json result files are supported.")
+
+        if not candidate.exists() or not candidate.is_file():
+            raise HTTPException(status_code=404, detail=f"Result file not found: {candidate}")
+
+        with open(candidate, "r", encoding="utf-8") as f:
+            payload = json.load(f)
+
+        if not isinstance(payload, dict) or "experiments" not in payload:
+            raise HTTPException(status_code=400, detail="Invalid results format. Expected top-level 'experiments'.")
+
+        return {
+            "path": str(candidate),
+            "results": payload,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load benchmark results: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

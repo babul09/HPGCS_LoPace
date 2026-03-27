@@ -4,6 +4,12 @@ import zstandard as zstd
 import time
 from typing import List, Dict, Tuple, Optional, Any
 
+try:
+    import lz4.frame as lz4f
+    _LZ4 = True
+except ImportError:
+    _LZ4 = False
+
 from lopace.parser import PromptParser
 from lopace.corpus_store import CorpusStore
 from lopace.delta_store import DeltaStore
@@ -39,7 +45,14 @@ def baseline_gzip(prompts: List[str], level: int = 9) -> Dict:
         raw = text.encode("utf-8")
         total_orig += len(raw)
         total_comp += len(gzip.compress(raw, compresslevel=level))
-    return {"method": "per_prompt_gzip", "total_original": total_orig, "total_compressed": total_comp, "ratio": total_orig / total_comp if total_comp else 0, "savings_pct": (1 - total_comp / total_orig) * 100 if total_orig else 0}
+    return {
+        "method": "per_prompt_gzip",
+        "level": level,
+        "total_original": total_orig,
+        "total_compressed": total_comp,
+        "ratio": total_orig / total_comp if total_comp else 0,
+        "savings_pct": (1 - total_comp / total_orig) * 100 if total_orig else 0,
+    }
 
 def baseline_brotli(prompts: List[str], quality: int = 11) -> Dict:
     total_orig = total_comp = 0
@@ -47,7 +60,161 @@ def baseline_brotli(prompts: List[str], quality: int = 11) -> Dict:
         raw = text.encode("utf-8")
         total_orig += len(raw)
         total_comp += len(brotli.compress(raw, quality=quality))
-    return {"method": "per_prompt_brotli", "total_original": total_orig, "total_compressed": total_comp, "ratio": total_orig / total_comp if total_comp else 0, "savings_pct": (1 - total_comp / total_orig) * 100 if total_orig else 0}
+    return {
+        "method": "per_prompt_brotli",
+        "quality": quality,
+        "total_original": total_orig,
+        "total_compressed": total_comp,
+        "ratio": total_orig / total_comp if total_comp else 0,
+        "savings_pct": (1 - total_comp / total_orig) * 100 if total_orig else 0,
+    }
+
+
+def baseline_gzip_levels(prompts: List[str], levels: Tuple[int, ...] = (1, 6, 9)) -> Dict:
+    """Compare gzip/DEFLATE across compression levels."""
+    runs = []
+    for level in levels:
+        t0 = time.time()
+        r = baseline_gzip(prompts, level=level)
+        r["time_s"] = time.time() - t0
+        runs.append(r)
+
+    best = max(runs, key=lambda x: x.get("ratio", 0)) if runs else {}
+    return {
+        "method": "gzip_level_sweep",
+        "levels": list(levels),
+        "runs": runs,
+        "best": best,
+    }
+
+
+def baseline_brotli_qualities(prompts: List[str], qualities: Tuple[int, ...] = (1, 5, 9, 11)) -> Dict:
+    """Compare Brotli across multiple quality levels."""
+    runs = []
+    for quality in qualities:
+        t0 = time.time()
+        r = baseline_brotli(prompts, quality=quality)
+        r["time_s"] = time.time() - t0
+        runs.append(r)
+
+    best = max(runs, key=lambda x: x.get("ratio", 0)) if runs else {}
+    return {
+        "method": "brotli_quality_sweep",
+        "qualities": list(qualities),
+        "runs": runs,
+        "best": best,
+    }
+
+
+def _cascade_compress(raw: bytes, chain: List[Tuple[str, Dict]]) -> bytes:
+    data = raw
+    for codec, params in chain:
+        if codec == "brotli":
+            data = brotli.compress(data, quality=params.get("quality", 11))
+        elif codec == "zstd":
+            cctx = zstd.ZstdCompressor(level=params.get("level", 15))
+            data = cctx.compress(data)
+        elif codec == "gzip":
+            data = gzip.compress(data, compresslevel=params.get("level", 9))
+        elif codec == "lz4hc":
+            if not _LZ4:
+                raise RuntimeError("lz4 is not available")
+            data = lz4f.compress(
+                data,
+                compression_level=params.get("level", 12),
+                block_linked=True,
+                store_size=False,
+            )
+        else:
+            raise ValueError(f"Unsupported codec in cascade: {codec}")
+    return data
+
+
+def _cascade_decompress(blob: bytes, chain: List[Tuple[str, Dict]]) -> bytes:
+    data = blob
+    for codec, params in reversed(chain):
+        if codec == "brotli":
+            data = brotli.decompress(data)
+        elif codec == "zstd":
+            dctx = zstd.ZstdDecompressor()
+            data = dctx.decompress(data)
+        elif codec == "gzip":
+            data = gzip.decompress(data)
+        elif codec == "lz4hc":
+            if not _LZ4:
+                raise RuntimeError("lz4 is not available")
+            data = lz4f.decompress(data)
+        else:
+            raise ValueError(f"Unsupported codec in cascade: {codec}")
+    return data
+
+
+def baseline_cascade(prompts: List[str], chain: List[Tuple[str, Dict]], name: str) -> Dict:
+    """Apply multiple compressors sequentially per prompt and measure aggregate ratio."""
+    total_orig = 0
+    total_comp = 0
+
+    try:
+        for text in prompts:
+            raw = text.encode("utf-8")
+            compressed = _cascade_compress(raw, chain)
+            rebuilt = _cascade_decompress(compressed, chain)
+            assert rebuilt == raw
+            total_orig += len(raw)
+            total_comp += len(compressed)
+    except Exception as e:
+        return {
+            "method": f"cascade_{name}",
+            "cascade": chain,
+            "error": str(e),
+        }
+
+    return {
+        "method": f"cascade_{name}",
+        "cascade": chain,
+        "total_original": total_orig,
+        "total_compressed": total_comp,
+        "ratio": total_orig / total_comp if total_comp else 0,
+        "savings_pct": (1 - total_comp / total_orig) * 100 if total_orig else 0,
+    }
+
+
+def baseline_hybrid_cascades(prompts: List[str]) -> Dict:
+    """Evaluate alternative hybrid cascades requested for baseline comparisons."""
+    configs = [
+        (
+            "brotli11_to_zstd15",
+            [("brotli", {"quality": 11}), ("zstd", {"level": 15})],
+        ),
+        (
+            "brotli9_to_zstd9",
+            [("brotli", {"quality": 9}), ("zstd", {"level": 9})],
+        ),
+        (
+            "zstd15_to_lz4hc12",
+            [("zstd", {"level": 15}), ("lz4hc", {"level": 12})],
+        ),
+        (
+            "zstd9_to_lz4hc9",
+            [("zstd", {"level": 9}), ("lz4hc", {"level": 9})],
+        ),
+    ]
+
+    runs = []
+    for name, chain in configs:
+        t0 = time.time()
+        r = baseline_cascade(prompts, chain, name=name)
+        r["time_s"] = time.time() - t0
+        runs.append(r)
+
+    valid_runs = [r for r in runs if "error" not in r]
+    best = max(valid_runs, key=lambda x: x.get("ratio", 0)) if valid_runs else {}
+
+    return {
+        "method": "hybrid_cascade_sweep",
+        "runs": runs,
+        "best": best,
+    }
 
 
 def baseline_zstd_dictionary(prompts: List[str], level: int = 15,

@@ -88,7 +88,11 @@ legacy/                         # Archived code (graph pipeline, old UIs)
 # Corpus dedup vs per-prompt Zstd (synthetic data, fast)
 python benchmark_corpus_dedup.py --n 1000
 
-# Full evaluation with all baselines including Zstd dictionary training
+# Full evaluation with comprehensive baselines:
+# - Brotli quality sweep (Q1/Q5/Q9/Q11)
+# - gzip/DEFLATE level sweep (L1/L6/L9)
+# - Hybrid cascades (Brotli→Zstd, Zstd→LZ4HC)
+# - Zstd dictionary training
 python benchmark_full_evaluation.py --n 5000
 
 # Real-world dataset evaluation
