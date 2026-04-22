@@ -78,9 +78,12 @@ def run_experiment(name: str, prompts: List[str], metadata: Dict) -> Dict:
     """Run all methods on a corpus and return consolidated results."""
     print(f"\n{'='*70}")
     print(f"  EXPERIMENT: {name}")
-    print(f"  {metadata['n_prompts']} prompts, "
-          f"mean {metadata['mean_prompt_chars']:.0f} chars/prompt, "
-          f"{metadata['total_chars']:,} total chars")
+    n_prompts = metadata.get('n_prompts', 'STREAM')
+    mean_chars = metadata.get('mean_prompt_chars', 0)
+    total_chars = metadata.get('total_chars', 'UNKNOWN')
+    print(f"  {n_prompts} prompts, "
+          f"mean {mean_chars:.0f} chars/prompt, "
+          f"{total_chars} total chars")
     if "source" in metadata:
         print(f"  Source: {metadata['source']}")
     if "exact_dup_pct" in metadata:

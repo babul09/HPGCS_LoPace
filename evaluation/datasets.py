@@ -11,7 +11,7 @@ def load_real_dataset(
     nested_field: Optional[str] = None,
     max_prompts: Optional[int] = None,
     min_length: int = 10,
-) -> Tuple[List[str], Dict]:
+) -> Tuple[Any, Dict]:
     """
     Load prompts from a real JSON dataset file.
 
@@ -56,10 +56,50 @@ def load_real_dataset(
     # Load raw data
     raw_data = _load_json_file(filepath)
 
+    # We will build metadata during streaming, so initially we only know file size
+    # For now, let's just create a lazy generator pipeline. To maintain backward compatibility with runner scripts
+    # that expect `len(prompts)`, we will load the prompts if it's a small dataset, but for O(1) pipelines
+    # we yield them. Since runner.py is updated, we will just yield and let runner handle metrics.
+    
+    class ReusableIterable:
+        def __init__(self, factory):
+            self.factory = factory
+        def __iter__(self):
+            return self.factory()
+
+    if isinstance(raw_data, type((x for x in []))): # If it's a generator
+        def factory():
+            def wrapper():
+                # Recreate raw_data stream by re-calling file loader dynamically
+                # Wait, raw_data is passed in. If raw_data is a generator it exhausts!
+                # We need to recreate raw_data!
+                fr_data = _load_jsonl(filepath) if str(filepath).endswith(".jsonl") else _load_json_file(filepath)
+                for p in _extract_prompts(fr_data, json_field, nested_field):
+                    p_str = p.strip()
+                    if isinstance(p_str, str) and len(p_str) >= min_length:
+                        yield p_str
+                        
+            prompts_iter = wrapper()
+            if max_prompts:
+                def limit_wrapper(it):
+                    for i, x in enumerate(it):
+                        if i >= max_prompts:
+                            break
+                        yield x
+                prompts_iter = limit_wrapper(prompts_iter)
+            return prompts_iter
+            
+        print(f"  Streaming dataset via Generator...")
+        return ReusableIterable(factory), {"dataset_type": "real", "source_file": str(filepath)}
+
     # Extract prompts
     prompts = _extract_prompts(raw_data, json_field, nested_field)
 
     # Filter and clean
+    if not isinstance(prompts, (list, tuple)):
+        # Ensure generator propagates 
+        prompts = list(prompts)
+        
     prompts = [p.strip() for p in prompts if isinstance(p, str) and len(p.strip()) >= min_length]
 
     # Deduplicate while preserving order (to measure natural redundancy)
@@ -67,6 +107,10 @@ def load_real_dataset(
     # the compression handles natural duplicates
     if max_prompts and len(prompts) > max_prompts:
         prompts = prompts[:max_prompts]
+
+    if getattr(prompts, '__iter__', False) and not isinstance(prompts, list):
+         # It's an iterator
+         return prompts, {"dataset_type": "real", "source_file": str(filepath)}
 
     if not prompts:
         raise ValueError(
@@ -83,13 +127,13 @@ def load_real_dataset(
         "n_prompts": len(prompts),
         "source_file": str(filepath),
         "file_size_bytes": file_size,
-        "mean_prompt_chars": sum(lengths) / len(lengths),
-        "median_prompt_chars": sorted(lengths)[len(lengths) // 2],
-        "min_prompt_chars": min(lengths),
-        "max_prompt_chars": max(lengths),
+        "mean_prompt_chars": sum(lengths) / len(lengths) if lengths else 0,
+        "median_prompt_chars": sorted(lengths)[len(lengths) // 2] if lengths else 0,
+        "min_prompt_chars": min(lengths) if lengths else 0,
+        "max_prompt_chars": max(lengths) if lengths else 0,
         "total_chars": sum(lengths),
         "unique_prompts": unique_prompts,
-        "exact_duplicate_pct": (1 - unique_prompts / len(prompts)) * 100,
+        "exact_duplicate_pct": (1 - unique_prompts / len(prompts)) * 100 if prompts else 0,
         "json_field_used": json_field or "auto-detected",
         "dataset_type": "real",
     }
@@ -132,21 +176,21 @@ def _load_json_file(filepath: Path) -> Any:
             raise ValueError(f"Could not parse {filepath} as JSON or JSONL")
 
 
-def _load_jsonl(filepath: Path) -> List[Dict]:
-    """Load JSON Lines file."""
-    records = []
-    with open(filepath, 'r', encoding='utf-8') as f:
-        for line_num, line in enumerate(f, 1):
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                records.append(json.loads(line))
-            except json.JSONDecodeError as e:
-                if line_num <= 3:
-                    raise  # First few lines should parse
-                continue  # Skip malformed lines later
-    return records
+def _load_jsonl(filepath: Path) -> Any:
+    """Load JSON Lines file as a Generator to prevent high memory usage."""
+    def generator():
+        with open(filepath, 'r', encoding='utf-8') as f:
+            for line_num, line in enumerate(f, 1):
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    yield json.loads(line)
+                except json.JSONDecodeError as e:
+                    if line_num <= 3:
+                        raise  # First few lines should parse
+                    continue  # Skip malformed lines later
+    return generator()
 
 
 def _sample_keys(data: Any) -> List[str]:
@@ -187,14 +231,40 @@ def _extract_prompts(
                     break
             else:
                 # If still a dict, try to use all values
-                if isinstance(data, dict):
-                    # Maybe it's a dict of id -> prompt
-                    data = list(data.values())
+                if isinstance(data, dict) and json_field:
+                    if json_field in data and isinstance(data[json_field], list):
+                        data = data[json_field]
+                    else:
+                        raise ValueError(f"Key '{json_field}' not found or not a list in dictionary object")
 
-    # data should now be a list
-    if not isinstance(data, list):
-        raise ValueError(f"Expected list, got {type(data).__name__}. Specify --json-field.")
+    is_iterable = isinstance(data, list) or getattr(data, '__iter__', False)
+    if not is_iterable:
+        raise ValueError(f"Expected list or generator, got {type(data).__name__}. Specify --json-field.")
 
+    prompts = []
+    
+    # In streaming mode, we must process dynamically
+    if getattr(data, '__iter__', False) and not isinstance(data, list):
+        detected_json_field = json_field
+        for first in data:
+            if isinstance(first, str):
+                yield first
+                continue
+            if isinstance(first, dict):
+                if not detected_json_field:
+                    keys = set(first.keys())
+                    prompt_fields = ['prompt', 'text', 'content', 'input', 'question', 'query', 'instruction', 'message', 'body', 'human', 'user', 'request', 'source', 'context', 'sentence', 'utterance']
+                    for f in prompt_fields:
+                        if f in keys:
+                            detected_json_field = f
+                            print(f"  Auto-detected field: '{f}'")
+                            break
+                if detected_json_field:
+                    p = _extract_field([first], detected_json_field, nested_field)
+                    if p: yield p[0]
+                continue
+        return
+        
     if not data:
         return []
 
@@ -253,7 +323,6 @@ def _extract_prompts(
             if text_parts:
                 prompts.append("\n".join(text_parts))
 
-    # Case 3: List of lists (e.g., conversation turns)
     elif isinstance(first, list):
         for conversation in data:
             parts = []
@@ -269,6 +338,24 @@ def _extract_prompts(
                 prompts.append("\n".join(parts))
 
     return prompts
+
+def convert_to_jsonl(input_file: str, output_file: str, json_field: str = None, nested_field: str = None):
+    """Utility to convert massive JSON arrays to JSONL format linearly."""
+    import ijson
+    print(f"Converting {input_file} to JSONL...")
+    with open(input_file, 'rb') as f_in, open(output_file, 'w', encoding='utf-8') as f_out:
+        objects = ijson.items(f_in, 'item')
+        count = 0
+        for obj in objects:
+            if json_field and json_field in obj:
+                text = obj[json_field]
+            else:
+                text = obj
+            f_out.write(json.dumps(text) + "\n")
+            count += 1
+            if count % 5000 == 0:
+                print(f"  Converted {count} items...")
+    print(f"Conversion complete! Wrote {count} lines to {output_file}")
 
 
 def _extract_field(
@@ -435,10 +522,15 @@ def analyze_dataset_redundancy(prompts: List[str]) -> Dict:
     """
     from collections import Counter
 
-    total_prompts = len(prompts)
+    total_prompts = 0
+    prompt_counts = Counter()
+    first_500 = []
+    for prompt in prompts:
+        prompt_counts[prompt] += 1
+        total_prompts += 1
+        if total_prompts <= 500:
+            first_500.append(prompt)
 
-    # Exact duplicate analysis
-    prompt_counts = Counter(prompts)
     unique_count = len(prompt_counts)
     most_common = prompt_counts.most_common(10)
 
@@ -470,9 +562,19 @@ def analyze_dataset_redundancy(prompts: List[str]) -> Dict:
 
     # Substring analysis (rough — check for common long substrings)
     # Use 100-char windows
+    # Word level analysis
+    import re
+    word_counts = Counter()
+    corpus_words = 0
+    
+    for p in first_500:  # Sample for performance
+        words = re.findall(r'\b\w+\b', p.lower())
+        word_counts.update(words)
+        corpus_words += len(words)
+    
     window_size = 100
     windows = Counter()
-    for p in prompts[:500]:  # Sample for performance
+    for p in first_500:
         for i in range(0, len(p) - window_size + 1, 50):  # Step by 50
             windows[p[i:i + window_size]] += 1
     repeated_windows = sum(1 for c in windows.values() if c > 1)

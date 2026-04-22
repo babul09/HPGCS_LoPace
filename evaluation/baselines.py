@@ -230,8 +230,19 @@ def baseline_zstd_dictionary(prompts: List[str], level: int = 15,
         return {"method": "zstd_dictionary", "error": "zstd not available"}
 
     # Split into training and test (but compress ALL with the dictionary)
-    n_train = max(10, int(len(prompts) * train_fraction))
-    train_samples = [p.encode("utf-8") for p in prompts[:n_train]]
+    train_samples = []
+    has_len = hasattr(prompts, '__len__') and not hasattr(prompts, 'factory')
+    
+    if has_len:
+        n_train = max(10, int(len(prompts) * train_fraction))
+        train_samples = [p.encode("utf-8") for p in prompts[:n_train]]
+    else:
+        # Paged streams don't have predictable length.
+        n_train = 250
+        for i, p in enumerate(prompts):
+            if i >= n_train:
+                break
+            train_samples.append(p.encode("utf-8"))
 
     # Train dictionary
     try:
