@@ -241,29 +241,46 @@ def _extract_prompts(
     if not is_iterable:
         raise ValueError(f"Expected list or generator, got {type(data).__name__}. Specify --json-field.")
 
-    prompts = []
-    
-    # In streaming mode, we must process dynamically
+    # In streaming mode (e.g., JSONL generator), return an iterator without
+    # making this function a generator itself. If this function contains a
+    # `yield` anywhere, it becomes a generator function and the list-based JSON
+    # path will silently yield nothing.
     if getattr(data, '__iter__', False) and not isinstance(data, list):
-        detected_json_field = json_field
-        for first in data:
-            if isinstance(first, str):
-                yield first
-                continue
-            if isinstance(first, dict):
+        def iter_prompts():
+            detected_json_field = json_field
+            for first in data:
+                if isinstance(first, str):
+                    yield first
+                    continue
+
+                if not isinstance(first, dict):
+                    continue
+
                 if not detected_json_field:
                     keys = set(first.keys())
-                    prompt_fields = ['prompt', 'text', 'content', 'input', 'question', 'query', 'instruction', 'message', 'body', 'human', 'user', 'request', 'source', 'context', 'sentence', 'utterance']
+                    if 'conversations' in keys:
+                        extracted = _extract_sharegpt([first], nested_field)
+                        if extracted:
+                            yield extracted[0]
+                        continue
+
+                    prompt_fields = [
+                        'prompt', 'text', 'content', 'input', 'question', 'query',
+                        'instruction', 'message', 'body', 'human', 'user', 'request',
+                        'source', 'context', 'sentence', 'utterance',
+                    ]
                     for f in prompt_fields:
                         if f in keys:
                             detected_json_field = f
                             print(f"  Auto-detected field: '{f}'")
                             break
+
                 if detected_json_field:
-                    p = _extract_field([first], detected_json_field, nested_field)
-                    if p: yield p[0]
-                continue
-        return
+                    extracted = _extract_field([first], detected_json_field, nested_field)
+                    if extracted:
+                        yield extracted[0]
+
+        return iter_prompts()
         
     if not data:
         return []

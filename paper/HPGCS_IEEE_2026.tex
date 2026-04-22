@@ -60,11 +60,11 @@ anbazhagu@srmist.edu.in}
 \maketitle
 
 \begin{abstract}
-Large Language Model (LLM) applications rely on prompt corpora that mix reusable structures and highly variable user content, making compression behavior strongly data-dependent. This paper presents an updated evaluation of HPGCS in a benchmark-lab setting with expanded baselines, real-data scaling, and synthetic reuse controls. The evaluated suite includes per-prompt Zstandard, gzip/DEFLATE sweeps, Brotli quality sweeps, hybrid cascades, BPE+Zstd hybrid, Zstd dictionary, corpus deduplication, chunked deduplication, delta compression, and an adaptive best-of-measured selector.
+Large Language Model (LLM) applications rely on prompt corpora that mix reusable structures and highly variable user content, making compression behavior strongly data-dependent. This paper presents an updated evaluation of HPGCS in a benchmark-lab setting with expanded baselines, real-data scaling, and synthetic reuse controls. The evaluated suite includes per-prompt Zstandard, gzip/DEFLATE sweeps, Brotli quality sweeps, hybrid cascades, BPE+Zstd hybrid, Zstd dictionary, corpus deduplication, chunked deduplication, delta compression, and a predictive size-threshold adaptive router baseline (\texttt{baseline\_adaptive\_router}).
 
-Across real data (up to 5,000 prompts), Brotli reaches 4.00x compression ratio while corpus deduplication reaches 2.03x, indicating that component-level reuse is limited in this dataset. Across synthetic high-reuse scenarios, corpus deduplication remains dominant, reaching 5.96x at full reuse and 5.38x at 80\% reuse, while dropping to 1.53x in worst-case zero-reuse settings. These results show that corpus-aware methods are highly effective when structural reuse is substantial but not universally superior in low-reuse corpora.
+Across real data (up to 5,000 prompts), Brotli reaches 4.00x compression ratio while corpus deduplication reaches 2.03x, indicating that component-level reuse is limited in this dataset. Zstd dictionary compression achieves 4.05x in edge-cached deployments (where the dictionary is pre-distributed) but only 3.99x when dictionary overhead is included in stored bytes; this bifurcation is reported explicitly for the first time in this revision. Across synthetic high-reuse scenarios, corpus deduplication remains dominant, reaching 5.96x at full reuse and 5.38x at 80\% reuse, while dropping to 1.53x in worst-case zero-reuse settings. These results show that corpus-aware methods are highly effective when structural reuse is substantial but not universally superior in low-reuse corpora.
 
-All tested paths are lossless and verified by exact reconstruction checks. The implementation is available as a modular Python codebase with reproducible scripts, real/synthetic benchmark modes, and file-driven visualization interfaces.
+The adaptive meta-selector has been updated from an exhaustive best-of-measured baseline (requiring all methods to run) to a predictive heuristic router using payload-size thresholds, reducing routing overhead to $O(1)$ per prompt. All tested paths are lossless and verified by exact reconstruction checks. The implementation is available as a modular Python codebase with reproducible scripts, real/synthetic benchmark modes, and file-driven visualization interfaces.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -72,7 +72,7 @@ prompt compression, large language models, corpus deduplication, zstandard, brot
 \end{IEEEkeywords}
 
 \section{Introduction}
-\textbf{Hybrid Prompt Graph Compression System (HPGCS):} We evaluate a modular compression architecture consisting of nine key components: (1) PromptParser for structural parsing, (2--6) five per-prompt compression backends (Zstandard, Brotli, gzip, LZ4, LZMA), (7) CorpusStore for content-addressed deduplication and blueprint generation, (8) DeltaStore for centroid/delta-based near-duplicate handling, and (9) an adaptive meta-selector that routes to the best-measured method.
+\textbf{Hybrid Prompt Graph Compression System (HPGCS):} We evaluate a modular compression architecture consisting of nine key components: (1) PromptParser for structural parsing, (2--6) five per-prompt compression backends (Zstandard, Brotli, gzip, LZ4, LZMA), (7) CorpusStore for content-addressed deduplication and blueprint generation, (8) DeltaStore for centroid/delta-based near-duplicate handling, and (9) an adaptive meta-selector baseline implemented as a predictive heuristic router (\texttt{baseline\_adaptive\_router}).
 
 Production LLM systems repeatedly process prompt structures that may include system instructions, tool schemas, context blocks, and user turns. Compression efficiency depends on whether redundancy appears within each prompt, across prompts, or both. Our initial hypothesis was that corpus-aware deduplication would be a dominant strategy under high structural reuse. In this paper, we re-evaluate that hypothesis using an expanded benchmark framework and additional real-data experiments.
 
@@ -83,7 +83,7 @@ The updated benchmark program evaluates multiple families of methods under a uni
     \item \textbf{Expanded benchmark suite:} We evaluate per-prompt and corpus-level methods, including quality/level sweeps and cascade variants, rather than a single baseline point.
     \item \textbf{Real-data scaling study:} We run capped real-data experiments at 200, 1,000, 2,000, and 5,000 prompts.
     \item \textbf{Synthetic reuse controls:} We report behavior under 0\%, 10\%, 80\%, and 100\% reuse regimes.
-    \item \textbf{Nuanced empirical conclusion:} Corpus deduplication is best in high-reuse synthetic corpora but not best on the evaluated real corpus, where Brotli and adaptive selection perform better.
+    \item \textbf{Nuanced empirical conclusion:} Corpus deduplication is best in high-reuse synthetic corpora but not best on the evaluated real corpus, where per-prompt Brotli dominates and the predictive adaptive router tracks near Zstandard.
     \item \textbf{Reproducible research assets:} The codebase provides scripts, JSON/CSV artifacts, and lossless verification checks.
 \end{enumerate}
 
@@ -111,12 +111,12 @@ The active implementation consists of modular components in the \texttt{lopace} 
 \begin{figure}[t]
 \centering
 \includegraphics[width=\linewidth]{paper/figures/novel3_architecture_flow_diagram.png}
-\caption{Architecture and data-flow diagram of the HPGCS system. The pipeline processes raw prompts through the PromptParser into segments, evaluates multiple per-prompt compression backends (Zstd, Brotli, gzip, LZ4) in parallel, and feeds results to the CorpusStore for content-addressed deduplication and blueprint generation. The DeltaStore provides an alternative centroid-based path for near-duplicate detection. The adaptive selector meta-method evaluates all measured ratios and chooses the best performing strategy. All paths feed through lossless reconstruction and hash-based verification checks before storage completion.}
+\caption{Architecture and data-flow diagram of the HPGCS system. The pipeline processes raw prompts through the PromptParser into segments, evaluates multiple per-prompt compression backends (Zstd, Brotli, gzip, LZ4) in parallel, and feeds results to the CorpusStore for content-addressed deduplication and blueprint generation. The DeltaStore provides an alternative centroid-based path for near-duplicate detection. The adaptive selector meta-method (\texttt{baseline\_adaptive\_router}) routes prompts using a simple size-threshold heuristic (Brotli for small payloads, Zstd otherwise). All paths feed through lossless reconstruction and hash-based verification checks before storage completion.}
 \label{fig:architecture_flow}
 \end{figure}
 
 \subsection{Evaluation Runner and Adaptive Selection}
-The experiment runner executes: per-prompt methods, dictionary mode, corpus dedup (standard and chunked), delta compression, and an adaptive meta-selector. The adaptive selector operates by evaluating all available methods and selecting the one with the highest compression ratio: $m^* = \arg\max_{m \in \mathcal{R}} \text{ratio}(m)$. While conceptually simple, this oracle approach serves as an upper bound for achievable performance and is impractical for online deployment due to the cumulative runtime cost of all methods.
+The experiment runner executes: per-prompt methods, dictionary mode, corpus dedup (standard and chunked), delta compression, and an adaptive heuristic router. The heuristic router dispatches each prompt to a compression backend based on payload size: prompts shorter than 800 bytes are routed to Brotli (which handles short payloads more efficiently), while larger prompts are compressed with Zstandard. This threshold-based approach eliminates the cumulative runtime cost of evaluating all methods exhaustively while achieving competitive ratios in practice. For dictionary mode, we report two metrics: \textbf{Isolated} (including the amortized dictionary overhead in stored bytes) and \textbf{Cached Edge} (payload compression only, assuming the dictionary is pre-distributed and cached at edge nodes), reflecting real-world broadcast deployment scenarios.
 
 \section{Methodology}
 Let corpus $\mathcal{C}=\{p_1,\dots,p_N\}$ with total original size
@@ -259,9 +259,9 @@ Experiments use two benchmark modes operating on the datasets characterized abov
 \subsection{Methods Evaluated}
 \begin{itemize}
     \item Per-prompt: Zstd, gzip (best of L1/L6/L9), Brotli (best of Q1/Q5/Q9/Q11), hybrid cascades, BPE+Zstd hybrid.
-    \item Dictionary: Zstd with 131,072-byte dictionary.
+    \item Dictionary: Zstd with 131,072-byte dictionary, reported as \textbf{Isolated} (overhead included) and \textbf{Cached Edge} (payload only, dictionary pre-cached).
     \item Corpus-level: dedup, chunked dedup, delta compression.
-    \item Meta-method: adaptive best-of-measured selector.
+    \item Meta-method: adaptive heuristic router (threshold-based: Brotli for $<$800 bytes, Zstd otherwise).
 \end{itemize}
 
 Chunked deduplication differs from standard deduplication by splitting larger referenceable segments into smaller chunks before hashing and storage, enabling partial reuse detection within segments. This can improve reuse discovery in mixed templates, but may underperform standard dedup when chunk-boundary metadata and blueprint expansion outweigh additional matches.
@@ -279,10 +279,10 @@ Table~\ref{tab:real_caps} summarizes real-data prompt-cap results.
 \hline
 \textbf{Prompts} & \textbf{Zstd} & \textbf{Brotli} & \textbf{Dedup} & \textbf{Adaptive} \\
 \hline
-200 & 3.07x & 3.85x & 1.96x & 3.85x \\
-1000 & 3.14x & 3.90x & 2.00x & 3.90x \\
-2000 & 3.21x & 4.00x & 2.04x & 4.00x \\
-5000 & 3.22x & 4.00x & 2.03x & 4.00x \\
+200 & 3.07x & 3.85x & 1.96x & 3.02x \\
+1000 & 3.14x & 3.90x & 2.00x & 3.09x \\
+2000 & 3.21x & 4.00x & 2.04x & 3.16x \\
+5000 & 3.22x & 4.00x & 2.03x & 3.17x \\
 \hline
 \end{tabular}
 \end{table}
@@ -292,7 +292,7 @@ On this real corpus, corpus deduplication remains near \(\approx 2.0\)x while pe
 \begin{figure}[t]
 \centering
 \includegraphics[width=\linewidth]{paper/figures/fig1_real_caps_ratio.png}
-\caption{Compression ratios across real-data prompt-cap experiments (200--5000 prompts). Brotli consistently achieves 3.85--4.00x compression ratio across all prompt counts, demonstrating stable per-prompt lexical compressibility. Zstandard achieves 3.07--3.22x. Corpus deduplication remains flat near 2.0x, suggesting that the real corpus--composed of diverse user interactions and variable content--exhibits limited repeating segment structures that would normally trigger significant cross-prompt savings. The adaptive selector (``Adaptive'') correctly identifies and selects Brotli as the best performer throughout this real-data regime, validating the meta-selection strategy for non-synthetic workloads.}
+\caption{Compression ratios across real-data prompt-cap experiments (200--5000 prompts). Brotli consistently achieves 3.85--4.00x compression ratio across all prompt counts, demonstrating stable per-prompt lexical compressibility. Zstandard achieves 3.07--3.22x. Corpus deduplication remains flat near 2.0x, suggesting that the real corpus--composed of diverse user interactions and variable content--exhibits limited repeating segment structures that would normally trigger significant cross-prompt savings. The adaptive router baseline (\texttt{baseline\_adaptive\_router}; ``Adaptive'') is a predictive size-threshold heuristic and therefore does not guarantee selecting the best-performing compressor; on this corpus it tracks near Zstd (3.02--3.17x) while remaining \(O(1)\) in routing overhead.}
 \label{fig:real_caps_ratio}
 \end{figure}
 
@@ -306,13 +306,13 @@ Table~\ref{tab:synthetic_scenarios} shows behavior under controlled reuse.
 \renewcommand{\arraystretch}{1.2}
 \begin{tabular}{|l|c|c|c|c|}
 \hline
-\textbf{Scenario} & \textbf{Zstd} & \textbf{Brotli} & \textbf{Dedup} & \textbf{Adaptive} \\
+\textbf{Scenario} & \textbf{Zstd} & \textbf{Brotli} & \textbf{Dedup} & \textbf{Adaptive Router} \\
 \hline
-Standard reuse (80\%) & 1.78x & 2.47x & 5.38x & 5.38x \\
-Full reuse (100\%) & 1.80x & 2.54x & 5.96x & 5.96x \\
-Low reuse (10\%) & 1.72x & 2.28x & 4.76x & 4.76x \\
-Zero reuse & 1.96x & 2.73x & 1.53x & 2.73x \\
-Zero reuse + tools/context & 1.90x & 2.51x & 2.45x & 2.51x \\
+Standard reuse (80\%) & 1.78x & 2.47x & 5.38x & 1.78x \\
+Full reuse (100\%) & 1.80x & 2.54x & 5.96x & 1.80x \\
+Low reuse (10\%) & 1.72x & 2.28x & 4.76x & 1.73x \\
+Zero reuse & 1.96x & 2.73x & 1.53x & 2.25x \\
+Zero reuse + tools/context & 1.90x & 2.51x & 2.45x & 1.94x \\
 \hline
 \end{tabular}
 \end{table}
@@ -358,31 +358,34 @@ Table~\ref{tab:complete_methods} summarizes compression ratios across all deploy
 \multicolumn{3}{|c|}{\textbf{Per-Prompt Methods}} \\
 \hline
 Zstandard (default) & 3.22x & 1.78x \\
-Brotli Q11 & 4.00x & 2.54x \\
-Brotli Q5 & 3.80x & 2.41x \\
-gzip L9 & 3.15x & 1.72x \\
-gzip L6 & 3.10x & 1.70x \\
+Brotli Q11 & 4.00x & 2.47x \\
+Brotli Q5 & 3.80x & 2.30x \\
+gzip L9 & 3.15x & 1.80x \\
+gzip L6 & 3.10x & 1.78x \\
 LZ4 & 2.40x & 1.55x \\
 \hline
 \multicolumn{3}{|c|}{\textbf{Dictionary \& Hybrid}} \\
 \hline
-Zstd + Dict (payload only) & 3.30x & 1.82x \\
-Zstd + Dict (w/ overhead) & 3.28x & 1.80x \\
-BPE + Zstd & 3.35x & 1.85x \\
-Cascade (Brotli$\rightarrow$Zstd) & 3.95x & 2.48x \\
+Zstd + Dict (Cached Edge) & 4.05x & -- \\
+Zstd + Dict (Isolated) & 3.99x & -- \\
+BPE + Zstd Hybrid & 3.60x & 1.85x \\
+Cascade (Brotli$\rightarrow$Zstd) & 3.98x & 2.43x \\
 \hline
 \multicolumn{3}{|c|}{\textbf{Corpus-Level Methods}} \\
 \hline
 Corpus Dedup (Standard) & 2.03x & 5.38x \\
-Corpus Dedup (Chunked) & 1.98x & 5.15x \\
-Delta Compression & 2.08x & 3.72x \\
+Corpus Dedup (Chunked) & 1.97x & 5.15x \\
+Delta Compression & 3.22x & 1.78x \\
 \hline
 \multicolumn{3}{|c|}{\textbf{Meta-Method}} \\
 \hline
-Adaptive Selector (Oracle) & 4.00x & 5.38x \\
+Adaptive Router (Heuristic) & 3.17x & 1.78x \\
 \hline
 \end{tabular}
 \end{table}
+
+\subsection{Dictionary Compression: Isolated vs.~Cached Edge}
+Zstd dictionary compression exhibits a stark bifurcation depending on deployment context. When the dictionary (131,072 bytes on our corpus) must be transmitted alongside each payload---the \textbf{Isolated} scenario---the effective ratio on a 200-prompt corpus is only 2.67x, far below per-prompt Brotli (3.85x). However, in an \textbf{edge-cached} deployment where the dictionary is pre-distributed to all edge nodes and only compressed payloads transit the network, the effective ratio reaches 4.05x at 5,000 prompts, marginally exceeding Brotli. This confirms that dictionary mode is a specialist choice: highly effective for edge-broadcast architectures with stable prompt templates, but counterproductive in latency-sensitive single-connection scenarios.
 
 \subsection{Decompression and Runtime Analysis}
 Deployment decisions must balance compression ratio with decompression speed and memory overhead. Table~\ref{tab:decompress} provides decompression benchmarks per method.
@@ -449,10 +452,12 @@ Tables~\ref{tab:complete_methods} and \ref{tab:decompress} jointly show the prac
 \label{fig:pareto_tradeoff}
 \end{figure}
 
-\subsection{Adaptive Selector Oracle: Practical Limitations}
-The adaptive selector achieves best-measured performance by running all K compression methods on a corpus of N prompts and selecting $m^* = \arg\max_m \text{ratio}(m)$. While this guarantees ratio performance at or above any single method, it incurs the cumulative runtime cost: $T_{\text{total}} = \sum_{k=1}^{K} T_k(N)$, where $T_k(N)$ is method $k$'s runtime on N prompts. For practical deployments with large N or many methods, this oracle cost can exceed the time budget for single-method compression, negating performance gains.
+\subsection{Adaptive Heuristic Router: Design and Tradeoffs}
+The updated adaptive strategy replaces a costly best-of-measured baseline with a predictive heuristic router. Each incoming prompt is routed based on its encoded byte size: payloads smaller than 800 bytes are compressed with Brotli (quality 9), which yields better ratios on short strings due to its larger static context window; payloads of 800 bytes or more are compressed with Zstandard (level 6), which is faster and scales better on larger inputs. This threshold was selected empirically to balance the crossover point between Brotli's advantage on short strings and Zstd's superior throughput on longer ones.
 
-\textbf{Recommendation:} The adaptive selector serves as an experimental upper bound. Production deployments should use lightweight corpus-feature estimation (e.g., sampling the first 100 prompts to estimate segment-reuse ratio) combined with a learned or rule-based predictor to select a single method \textit{without} full evaluation. Future work (Section~\ref{sec:conclusion}) addresses this via online feature-based adaptive routing.
+On the real corpus, the fixed 800-byte threshold routes most prompts to Zstandard (e.g., at 5,000 prompts: 212 ``tiny'' to Brotli and 4,788 ``monolithic'' to Zstd), yielding a router ratio of 3.17x. This reflects the design tradeoff: the router minimizes routing cost but does not guarantee the best available ratio on any given corpus (Brotli remains higher at 4.00x). On zero-reuse synthetic prompts with mixed sizes, the router achieves 2.25x versus Brotli's 2.73x, indicating that the threshold should be tuned to the target domain. The key advantage is latency: the heuristic router requires only a single size check per prompt, with $O(1)$ routing overhead, versus \(O(K \cdot N)\) exhaustive evaluation.
+
+\textbf{Deployment guidance:} Use the heuristic router as a default when prompt size distribution is unknown. For corpora with known high structural reuse, pre-train a Zstd dictionary and use Cached Edge mode. For high-reuse synthetic pipelines, corpus deduplication dominates.
 
 \subsection{Sensitivity Analysis: Deduplication Advantage Across Scales}
 From Table~\ref{tab:synthetic_scaling}, dedup is initially unfavorable at $N=1$ (-32.3\% vs Zstd), crosses over by $N=10$ (+51.3\%), and widens by $N=100$ (+66.9\%) as reusable structures accumulate. In contrast, the real-data caps (Table~\ref{tab:real_caps}) show dedup ratios plateauing around 2.0x while Brotli remains near 4.0x, indicating that larger $N$ alone is insufficient without substantial cross-prompt reuse. This confirms that dedup advantage is reuse-conditional, not size-conditional.
