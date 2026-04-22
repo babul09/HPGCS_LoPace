@@ -8,14 +8,15 @@ from lopace.corpus_store import CorpusStore
 from .baselines import (
     baseline_zstd, baseline_gzip_levels, baseline_brotli_qualities, baseline_zstd_dictionary,
     baseline_hybrid, corpus_dedup_method, corpus_dedup_chunked,
-    delta_compression_method, adaptive_routing_method, baseline_hybrid_cascades
+    delta_compression_method, adaptive_routing_method, baseline_hybrid_cascades,
+    baseline_adaptive_router
 )
 
 # ─── Scaling Analysis ─────────────────────────────────────────────────────────
 
-def scaling_analysis(prompts: List[str], level: int = 15) -> List[Dict]:
+def scaling_analysis(prompts: Any, level: int = 15) -> List[Dict]:
     """Measure all methods at increasing corpus sizes."""
-    n = len(prompts)
+    n = len(prompts) if hasattr(prompts, '__len__') and not hasattr(prompts, 'factory') else 50000
     checkpoints = sorted(set(
         [1, 2, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, n]
     ))
@@ -166,8 +167,9 @@ def run_experiment(name: str, prompts: List[str], metadata: Dict) -> Dict:
     r["time_s"] = time.time() - t
     results["methods"]["zstd_dict"] = r
     if "error" not in r:
-        print(f"{r['ratio_with_dict']:.2f}x  {r['savings_pct']:.1f}% "
-              f"(dict overhead: {r['dictionary_size']:,} bytes)  ({r['time_s']:.2f}s)")
+        print(f"Isolated: {r['ratio_with_dict']:.2f}x ({r['savings_isolated_pct']:.1f}%) | "
+              f"Cached Edge: {r['ratio_without_dict']:.2f}x ({r['savings_cached_pct']:.1f}%) "
+              f"[Dict size: {r['dictionary_size']:,} B]  ({r['time_s']:.2f}s)")
     else:
         print(f"skipped ({r['error']})")
 
@@ -201,29 +203,14 @@ def run_experiment(name: str, prompts: List[str], metadata: Dict) -> Dict:
 
     # 7. Adaptive Routing (Meta-Selector)
     print("  [7/7] Adaptive Strategy Selector...", end=" ", flush=True)
-    best_method_name = ""
-    best_ratio = -1
-    best_result = None
-    
-    for method_name, res_dict in results["methods"].items():
-        if method_name == "adaptive" or "error" in res_dict:
-            continue
-            
-        ratio = res_dict.get("ratio", res_dict.get("ratio_with_dict", 0))
-        if ratio > best_ratio:
-            best_ratio = ratio
-            best_method_name = method_name
-            best_result = dict(res_dict)
-            
-    if best_result:
-        best_result["method"] = "adaptive_routing"
-        best_result["selected_strategy"] = best_method_name
-        # The adaptive meta-selector has essentially zero time latency as it just compares outputs
-        best_result["time_s"] = 0.0
-        results["methods"]["adaptive"] = best_result
-        print(f"Chose {best_method_name} at {best_ratio:.2f}x")
+    t = time.time()
+    r = baseline_adaptive_router(prompts)
+    results["methods"]["adaptive"] = r
+    if "error" not in r:
+        print(f"{r['ratio']:.2f}x  {r['savings_pct']:.1f}%  "
+              f"(Routed {r['brotli_routed']} tiny / {r['zstd_routed']} monolithic)  ({r['time_s']:.2f}s)")
     else:
-        print("Failed to find a valid strategy.")
+        print(f"skipped ({r['error']})")
 
     # Comparison table
     print(f"\n  {'Method':<30} {'Ratio':>8} {'Savings':>10} {'Stored':>14} {'Time':>8}")
@@ -233,18 +220,32 @@ def run_experiment(name: str, prompts: List[str], metadata: Dict) -> Dict:
                         ("brotli", "Per-prompt Brotli (best)"),
                         ("cascade", "Hybrid Cascade (best)"),
                         ("hybrid", "Per-prompt Hybrid"),
-                        ("zstd_dict", "Zstd + Dictionary"),
+                        ("zstd_dict", "Zstd + Dict (Isolated)"),
+                        ("zstd_dict_cached", "Zstd + Dict (Cached Edge)"),
                         ("corpus_dedup", "Corpus Dedup"),
                         ("corpus_dedup_chunked", "Corpus Dedup (chunked)"),
                         ("delta", "Delta Compression"),
                         ("adaptive", "Adaptive Router")]:
-        m = results["methods"].get(key, {})
+        m = results["methods"].get(key.replace("_cached", ""), {})
         if "error" in m:
             continue
-        ratio = m.get("ratio") or m.get("ratio_with_dict", 0)
-        savings = m.get("savings_pct", 0)
-        stored = m.get("total_compressed") or m.get("total_with_dict_overhead", 0)
-        t_s = m.get("time_s", 0)
+            
+        if key == "zstd_dict":
+            ratio = m.get("ratio_with_dict", 0)
+            savings = m.get("savings_isolated_pct", 0)
+            stored = m.get("total_with_dict_overhead", 0)
+            t_s = m.get("time_s", 0)
+        elif key == "zstd_dict_cached":
+            ratio = m.get("ratio_without_dict", 0)
+            savings = m.get("savings_cached_pct", 0)
+            stored = m.get("total_compressed", 0)
+            t_s = 0.0 # Same computation block
+        else:
+            ratio = m.get("ratio", 0)
+            savings = m.get("savings_pct", 0)
+            stored = m.get("total_compressed", 0)
+            t_s = m.get("time_s", 0)
+            
         print(f"  {label:<30} {ratio:>8.2f}x {savings:>9.1f}% {stored:>13,} {t_s:>7.1f}s")
 
     return results

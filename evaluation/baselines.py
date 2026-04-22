@@ -275,7 +275,8 @@ def baseline_zstd_dictionary(prompts: List[str], level: int = 15,
         "dictionary_size": dict_overhead,
         "ratio_without_dict": total_orig / total_comp if total_comp else 0,
         "ratio_with_dict": total_orig / total_with_dict if total_with_dict else 0,
-        "savings_pct": (1 - total_with_dict / total_orig) * 100 if total_orig else 0,
+        "savings_cached_pct": (1 - total_comp / total_orig) * 100 if total_orig else 0,
+        "savings_isolated_pct": (1 - total_with_dict / total_orig) * 100 if total_orig else 0,
         "train_samples": n_train,
     }
 
@@ -397,9 +398,9 @@ def delta_compression_method(prompts: List[str], level: int = 15,
         
         # Progress for large datasets
         if (i + 1) % 1000 == 0:
-            print(f"\r    Processing {i+1}/{len(prompts)}...", end="", flush=True)
+            print(f"\r    Processing {i+1}...", end="", flush=True)
 
-    if len(prompts) > 1000:
+    if i > 1000:
         print()
 
     stats = store.corpus_stats()
@@ -434,9 +435,9 @@ def adaptive_routing_method(prompts: List[str], level: int = 15) -> Dict:
         
         # Progress for large datasets
         if (i + 1) % 1000 == 0:
-            print(f"\r    Processing Adaptive {i+1}/{len(prompts)}...", end="", flush=True)
+            print(f"\r    Processing Adaptive {i+1}...", end="", flush=True)
 
-    if len(prompts) > 1000:
+    if i > 1000:
         print()
 
     stats = store.stats()
@@ -460,6 +461,53 @@ def adaptive_routing_method(prompts: List[str], level: int = 15) -> Dict:
         "n_dedup": n_dedup,
         "n_mono": n_mono,
         "time_s": elapsed,
+    }
+
+
+def baseline_adaptive_router(prompts: Any) -> Dict:
+    """Predictive meta-selector heuristically dispatching strings."""
+    import time
+    import zstandard as zstd
+    import brotli
+
+    total_orig = 0
+    total_comp = 0
+    t0 = time.time()
+    
+    threshold = 800  # bytes
+    strategies = {"brotli": 0, "zstd": 0}
+    
+    # Using Zstd compressor for sizes > 800
+    cctx = zstd.ZstdCompressor(level=6)
+
+    for i, prompt in enumerate(prompts):
+        raw = prompt.encode("utf-8")
+        s = len(raw)
+        total_orig += s
+        
+        # Adaptive Threshold Heuristic (Brotli handles tiny packets gracefully, Zstd handles larger blocks)
+        if s < threshold:
+            strategies["brotli"] += 1
+            total_comp += len(brotli.compress(raw, quality=9))
+        else:
+            strategies["zstd"] += 1
+            total_comp += len(cctx.compress(raw))
+            
+        if (i + 1) % 5000 == 0:
+            print(f"\r    Adaptive routing {i+1}...", end="", flush=True)
+            
+    if hasattr(prompts, '__len__') and len(prompts) > 5000 or (total_orig > 0):
+        print()
+            
+    return {
+        "method": "adaptive_router",
+        "total_original": total_orig,
+        "total_compressed": total_comp,
+        "ratio": total_orig / total_comp if total_comp else 0,
+        "savings_pct": (1 - total_comp / total_orig) * 100 if total_orig else 0,
+        "time_s": time.time() - t0,
+        "brotli_routed": strategies["brotli"],
+        "zstd_routed": strategies["zstd"],
     }
 
 
