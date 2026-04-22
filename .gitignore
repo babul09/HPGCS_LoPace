@@ -52,6 +52,12 @@ ENV/
 env/
 .venv
 
+# Local toolchains / build caches (workspace-only)
+.cargo/
+.cargo-root/
+.rustup/
+.tectonic-cache/
+
 # IDEs
 .vscode/
 .idea/
@@ -80,3 +86,6 @@ lopace/_version.py
 
 eval_results.json
 /datasets
+
+# LaTeX build outputs
+paper/*.pdf

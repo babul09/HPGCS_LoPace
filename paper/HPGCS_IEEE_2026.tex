@@ -6,6 +6,7 @@
 \usepackage{amssymb}
 \usepackage{cite}
 \usepackage{graphicx}
+\graphicspath{{figures/}{paper/figures/}}
 \usepackage{listings}
 \usepackage{color}
 \usepackage{xcolor}
@@ -110,7 +111,7 @@ The active implementation consists of modular components in the \texttt{lopace} 
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=\linewidth]{paper/figures/novel3_architecture_flow_diagram.png}
+\includegraphics[width=\linewidth]{novel3_architecture_flow_diagram.png}
 \caption{Architecture and data-flow diagram of the HPGCS system. The pipeline processes raw prompts through the PromptParser into segments, evaluates multiple per-prompt compression backends (Zstd, Brotli, gzip, LZ4) in parallel, and feeds results to the CorpusStore for content-addressed deduplication and blueprint generation. The DeltaStore provides an alternative centroid-based path for near-duplicate detection. The adaptive selector meta-method (\texttt{baseline\_adaptive\_router}) routes prompts using a simple size-threshold heuristic (Brotli for small payloads, Zstd otherwise). All paths feed through lossless reconstruction and hash-based verification checks before storage completion.}
 \label{fig:architecture_flow}
 \end{figure}
@@ -291,7 +292,7 @@ On this real corpus, corpus deduplication remains near \(\approx 2.0\)x while pe
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=\linewidth]{paper/figures/fig1_real_caps_ratio.png}
+\includegraphics[width=\linewidth]{fig1_real_caps_ratio.png}
 \caption{Compression ratios across real-data prompt-cap experiments (200--5000 prompts). Brotli consistently achieves 3.85--4.00x compression ratio across all prompt counts, demonstrating stable per-prompt lexical compressibility. Zstandard achieves 3.07--3.22x. Corpus deduplication remains flat near 2.0x, suggesting that the real corpus--composed of diverse user interactions and variable content--exhibits limited repeating segment structures that would normally trigger significant cross-prompt savings. The adaptive router baseline (\texttt{baseline\_adaptive\_router}; ``Adaptive'') is a predictive size-threshold heuristic and therefore does not guarantee selecting the best-performing compressor; on this corpus it tracks near Zstd (3.02--3.17x) while remaining \(O(1)\) in routing overhead.}
 \label{fig:real_caps_ratio}
 \end{figure}
@@ -321,7 +322,7 @@ These results confirm that deduplication gains scale with reusable structure and
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=\linewidth]{paper/figures/fig2_synthetic_scenarios_ratio.png}
+\includegraphics[width=\linewidth]{fig2_synthetic_scenarios_ratio.png}
 \caption{Compression ratios under five controlled synthetic reuse scenarios (100 prompts each). The bar chart compares Zstandard, Brotli, corpus deduplication, and adaptive selection. Under standard 80\% reuse, corpus deduplication reaches 5.38x--more than double Brotli's 2.47x. At full 100\% reuse, deduplication peaks at 5.96x. At low 10\% reuse, deduplication remains competitive at 4.76x. Critically, in the zero-reuse scenario (unique prompts with no segment repetition), deduplication collapses to 1.53x while Brotli maintains 2.73x, confirming the theoretical crossover condition. When zero-reuse prompts include shared tool/context scaffolding (last bar), deduplication recovers to 2.45x by exploiting that structured reuse. These results validate the Crossover Condition theorem: corpus methods outperform only when reuse gains exceed overhead.}
 \label{fig:synthetic_scenarios}
 \end{figure}
@@ -416,7 +417,7 @@ In synthetic settings, dedup shows an early crossover after very small corpus si
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=\linewidth]{paper/figures/fig3_scaling_synthetic_real.png}
+\includegraphics[width=\linewidth]{fig3_scaling_synthetic_real.png}
 \caption{Scaling behavior of deduplication versus per-prompt baselines on synthetic (80\% reuse) and real corpora. Left panel shows synthetic scaling on log-log axes: deduplication exhibits a warm-corpus effect, with ratio rising steeply from 1.37x at N=1 (initial overhead dominance) to 3.71x at N=10 and 5.38x at N=100, confirming the Warm-Corpus Lemma. Per-prompt methods (Zstandard, Brotli) remain nearly flat, indicating limited benefit from corpus growth when each prompt compresses independently. Right panel shows real-data scaling: deduplication rises modestly from 1.87x (N=200) to 2.03x (N=5000), whereas Brotli remains flat near 4.0x. The synthetic curve's steep rise and real curve's plateau visually demonstrate the dataset-dependency claim in the abstract and motivate the corpus-aware strategy selection guidance.}
 \label{fig:scaling_curves}
 \end{figure}
@@ -447,7 +448,7 @@ Tables~\ref{tab:complete_methods} and \ref{tab:decompress} jointly show the prac
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=\linewidth]{paper/figures/novel1_pareto_ratio_vs_time.png}
+\includegraphics[width=\linewidth]{novel1_pareto_ratio_vs_time.png}
 \caption{Pareto frontier scatter plot showing compression ratio (y-axis, log scale) versus mean compression time per prompt (x-axis, symlog scale) for all evaluated methods. Methods positioned high and left represent better efficiency and faster execution. Brotli variants cluster in the upper-right region (high ratio, moderate time). Per-prompt Zstandard occupies the middle, balancing speed and ratio. Corpus deduplication methods appear at lower ratios but vary in time overhead depending on blueprint construction (fast variants near 1--10ms, slower variants with indexing near 50--100ms). The point distribution highlights how strategy choice changes with optimization priorities (ratio, speed, or weighted trade-off), clarifying deployment decisions beyond single-metric comparisons.}
 \label{fig:pareto_tradeoff}
 \end{figure}
@@ -464,7 +465,7 @@ From Table~\ref{tab:synthetic_scaling}, dedup is initially unfavorable at $N=1$ 
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=\linewidth]{paper/figures/novel2_heatmap_dedup_advantage_real_caps.png}
+\includegraphics[width=\linewidth]{novel2_heatmap_dedup_advantage_real_caps.png}
 \caption{Heatmap showing the percentage advantage of corpus deduplication over Zstandard (rows by method, columns by prompt-cap: 200, 1K, 2K, 5K). Green-toned regions indicate scenarios where deduplication outperforms; red-toned regions indicate underperformance. The dominant red pattern across prompt caps confirms that on this real corpus, deduplication consistently underperforms by 30--50\% relative to Zstandard. In contrast, corresponding plots for synthetic high-reuse corpora (not shown) are expected to be predominantly green-toned, indicating dedup superiority. A small green-toned region appears in the zero-reuse-with-tools scenario where structured scaffolding creates enough repetition for deduplication to compete. This figure summarizes the core data-dependency thesis: method suitability is corpus-conditional rather than universal.}
 \label{fig:heatmap_advantage}
 \end{figure}
