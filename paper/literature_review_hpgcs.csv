@@ -1,0 +1,14 @@
+Existing Systems / Research,Key Findings,Research Gap Identified
+
+Zstandard (RFC 8878),"Strong speed–compression balance","No corpus-level reuse vs per-prompt comparison; HPGCS benchmarks this"
+Zstd Dictionary Training,"Better compression on repetitive data","Overhead often ignored; need payload vs total-cost reporting (HPGCS)"
+Brotli,"High compression, slower at max quality","Lacks prompt-corpus vs dedup comparisons; HPGCS adds analysis"
+LZ4,"Very fast, lower compression","Speed–ratio tradeoffs underreported; HPGCS includes runtime context"
+LZ77/DEFLATE,"Robust baseline for redundancy","Unclear per-prompt vs dedup crossover; HPGCS quantifies"
+Compression Prompts (Su et al.),"Lossy prompt shortening","Not for lossless storage; HPGCS benchmarks exact methods"
+Gisting,"Summarization improves context use","No lossless/storage evaluation; HPGCS adds scaling + fidelity"
+LLMLingua,"Token pruning reduces cost","Focus on lossy inference; HPGCS targets lossless pipelines"
+Selective Context,"Salient context selection","No dedup overhead/reuse analysis; HPGCS defines thresholds"
+Git CAS,"Scalable dedup architecture","Not adapted/tested for prompts; HPGCS operationalizes"
+Backup Dedup (FAST 2010),"High savings with reuse","Unclear for prompt corpora; HPGCS tests reuse regimes"
+Sparse Indexing (Data Domain),"Efficient dedup indexing","No fair codec comparisons; HPGCS standardizes evaluation"
