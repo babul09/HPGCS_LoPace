@@ -56,7 +56,9 @@ env/
 .cargo/
 .cargo-root/
 .rustup/
+.cargo-bin/
 .tectonic-cache/
+.tectonic-home/
 
 # IDEs
 .vscode/
