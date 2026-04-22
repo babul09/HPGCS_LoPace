@@ -20,6 +20,12 @@ TECTONIC_BIN=""
 if command -v tectonic >/dev/null 2>&1; then
   TECTONIC_BIN="$(command -v tectonic)"
 elif [[ -x "${ROOT_DIR}/.cargo-bin/bin/tectonic" ]]; then
+  : "${ALLOW_LOCAL_TECTONIC:=0}"
+  if [[ "${ALLOW_LOCAL_TECTONIC}" != "1" ]]; then
+    echo "ERROR: Refusing to run repo-local tectonic (${ROOT_DIR}/.cargo-bin/bin/tectonic)." >&2
+    echo "Set ALLOW_LOCAL_TECTONIC=1 to override." >&2
+    exit 1
+  fi
   TECTONIC_BIN="${ROOT_DIR}/.cargo-bin/bin/tectonic"
 fi
 

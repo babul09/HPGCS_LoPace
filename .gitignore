@@ -86,6 +86,8 @@ lopace/_version.py
 # screenshots/*.csv
 !screenshots/.gitkeep
 
+# Generated evaluation outputs
+evaluation_results.json
 eval_results.json
 /datasets
 
