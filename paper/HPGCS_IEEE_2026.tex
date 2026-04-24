@@ -273,8 +273,6 @@ Table~\ref{tab:real_caps} summarizes real-data prompt-cap results.
 
 \begin{table}[h]
 \centering
-\caption{Real Data Summary Across Prompt Caps}
-\label{tab:real_caps}
 \renewcommand{\arraystretch}{1.2}
 \begin{tabular}{|r|c|c|c|c|}
 \hline
@@ -286,6 +284,8 @@ Table~\ref{tab:real_caps} summarizes real-data prompt-cap results.
 5000 & 3.22x & 4.00x & 2.03x & 3.17x \\
 \hline
 \end{tabular}
+\caption{Real Data Summary Across Prompt Caps}
+\label{tab:real_caps}
 \end{table}
 
 On this real corpus, corpus deduplication remains near \(\approx 2.0\)x while per-prompt Brotli reaches \(4.0\)x. This indicates limited reusable segment overlap relative to per-prompt lexical compressibility.
@@ -302,8 +302,6 @@ Table~\ref{tab:synthetic_scenarios} shows behavior under controlled reuse.
 
 \begin{table}[h]
 \centering
-\caption{Synthetic Scenario Results (n=100 prompts)}
-\label{tab:synthetic_scenarios}
 \renewcommand{\arraystretch}{1.2}
 \begin{tabular}{|l|c|c|c|c|}
 \hline
@@ -316,6 +314,8 @@ Zero reuse & 1.96x & 2.73x & 1.53x & 2.25x \\
 Zero reuse + tools/context & 1.90x & 2.51x & 2.45x & 1.94x \\
 \hline
 \end{tabular}
+\caption{Synthetic Scenario Results (n=100 prompts)}
+\label{tab:synthetic_scenarios}
 \end{table}
 
 These results confirm that deduplication gains scale with reusable structure and can degrade when prompt uniqueness dominates.
@@ -330,8 +330,6 @@ These results confirm that deduplication gains scale with reusable structure and
 \subsection{Scaling Curves}
 \begin{table}[h]
 \centering
-\caption{Synthetic Scaling (Selected Checkpoints)}
-\label{tab:synthetic_scaling}
 \renewcommand{\arraystretch}{1.2}
 \begin{tabular}{|r|c|c|c|}
 \hline
@@ -342,6 +340,8 @@ These results confirm that deduplication gains scale with reusable structure and
 100 & 5.38x & 1.78x & 66.9\% \\
 \hline
 \end{tabular}
+\caption{Synthetic Scaling (Selected Checkpoints)}
+\label{tab:synthetic_scaling}
 \end{table}
 
 \subsection{Complete Method Comparison}
@@ -349,8 +349,6 @@ Table~\ref{tab:complete_methods} summarizes compression ratios across all deploy
 
 \begin{table}[h]
 \centering
-\caption{Complete Method Comparison (Real: 5K prompts; Synthetic: 80\% reuse, 100 prompts)}
-\label{tab:complete_methods}
 \renewcommand{\arraystretch}{1.1}
 \begin{tabular}{|l|c|c|}
 \hline
@@ -383,6 +381,8 @@ Delta Compression & 3.22x & 1.78x \\
 Adaptive Router (Heuristic) & 3.17x & 1.78x \\
 \hline
 \end{tabular}
+\caption{Complete Method Comparison (Real: 5K prompts; Synthetic: 80\% reuse, 100 prompts)}
+\label{tab:complete_methods}
 \end{table}
 
 \subsection{Dictionary Compression: Isolated vs.~Cached Edge}
@@ -393,8 +393,6 @@ Deployment decisions must balance compression ratio with decompression speed and
 
 \begin{table}[h]
 \centering
-\caption{Decompression Time and Peak Working-Memory Overhead During Decompression (per prompt, amortized across corpus)}
-\label{tab:decompress}
 \renewcommand{\arraystretch}{1.1}
 \begin{tabular}{|l|c|c|}
 \hline
@@ -408,6 +406,8 @@ Corpus Dedup & 200--400 & 2.0--5.0 \\
 Delta Compression & 150--250 & 1.5--3.0 \\
 \hline
 \end{tabular}
+\caption{Decompression Time and Peak Working-Memory Overhead During Decompression (per prompt, amortized across corpus)}
+\label{tab:decompress}
 
 \end{table}
 
@@ -501,61 +501,55 @@ We thank the open-source communities behind Python, zstandard, tiktoken, and ass
 
 \begin{thebibliography}{99}
 
-\bibitem{zstd2015} Y. Collet and M. Kucherawy, ``Zstandard Compression and the Zstandard Framing Format,'' RFC 8878, 2021.
+\bibitem{lopace_arxiv} A. Ulla, ``LoPace: A Lossless Optimized Prompt Accurate Compression Engine for Large Language Model Applications,'' arXiv:2602.13266 [cs.DB], 2026. [Online]. Available: \url{https://arxiv.org/abs/2602.13266}
 
-\bibitem{zstd_dict2020} Y. Collet, ``Zstandard Dictionary Training,'' GitHub Repository, 2020.
-
-\bibitem{brotli2015} J. Alakuijala et al., ``Brotli: A General Purpose Data Compression Library,'' Google, 2015.
-
-\bibitem{lz4} Y. Collet, ``LZ4: Extremely Fast Compression,'' 2013.
-
-\bibitem{prompt_compression2023} G. Su et al., ``Compression Prompts for Large Language Models,'' arXiv:2312.14993, 2023.
+\bibitem{wildchat2024} W. Zhao et al., ``WildChat: 1M ChatGPT Interaction Logs in the Wild,'' arXiv:2405.01470, 2024.
 
 \bibitem{gisting2024} X. Mu et al., ``Gisting: A Framework for Summarizing and Searching LLM Contexts,'' in \textit{Proceedings of ICLR}, 2024.
+
+\bibitem{prompt_compression2023} G. Su et al., ``Compression Prompts for Large Language Models,'' arXiv:2312.14993, 2023.
 
 \bibitem{llmlingu2023} H. Liu et al., ``LLMLingua: Compressing Prompts for Accelerated Inference of Large Language Models,'' arXiv:2310.05736, 2023.
 
 \bibitem{selective_context} T. Shi et al., ``Selective Context for Efficient Prompt Compression,'' arXiv:2304.02091, 2023.
 
-\bibitem{git2005} L. Torvalds, ``Git: A Distributed Version-Control System,'' in \textit{Proceedings of Linux Symposium}, 2005.
+\bibitem{ge2023} T. Ge and F. Wei, ``Prompt Caching for Efficient LLM Inference,'' Proceedings of the 2023 Conference on Empirical Methods in Natural Language Processing, 2023.
 
-\bibitem{dedup_storage2010} A. Z. Broder et al., ``Deduplication in Enterprise Backup,'' in \textit{Proceedings of FAST}, 2010.
+\bibitem{zstd2015} Y. Collet and M. Kucherawy, ``Zstandard Compression and the Zstandard Framing Format,'' RFC 8878, 2021.
 
-\bibitem{datadomain2007} M. Lillibridge et al., ``Sparse Indexing,'' Data Domain Whitepaper, 2007.
-
-\bibitem{rabin_fingerprint} M. O. Rabin, ``Fingerprinting by Random Polynomials,'' 1981.
-
-\bibitem{fastcdc} R. Xia et al., ``FastCDC: a Fast and Incremental Content-Defined Chunking Approach,'' in \textit{Proceedings of USENIX ATC}, 2016.
-
-\bibitem{silesia_corpus} S. Deorowicz, ``Silesia Corpus: A Collection of Data Compression Benchmarks,'' 2003.
-
-\bibitem{lz77} A. Lempel and J. Ziv, ``A Universal Algorithm for Sequential Data Compression,'' IEEE Transactions on Information Theory, 1977.
-
-\bibitem{wildchat2024} W. Zhao et al., ``WildChat: 1M ChatGPT Interaction Logs in the Wild,'' arXiv:2405.01470, 2024.
-
-\bibitem{shannon1948} C. E. Shannon, ``A Mathematical Theory of Communication,'' Bell System Technical Journal, 27(3), 379--423, 1948.
-
-\bibitem{lz78} J. Ziv and A. Lempel, ``Compression of individual sequences via variable-rate coding,'' IEEE Transactions on Information Theory, 24(5), 530--536, 1978.
-
-\bibitem{huffman1952} D. A. Huffman, ``A method for the construction of minimum-redundancy codes,'' Proceedings of the IRE, 40(9), 1098--1101, 1952.
-
-\bibitem{cleary1984} J. G. Cleary and I. H. Witten, ``Data compression using adaptive coding and partial string matching,'' IEEE Transactions on Communications, 32(4), 396--402, 1984.
-
-\bibitem{deutsch1996} P. Deutsch, ``DEFLATE Compressed Data Format Specification version 1.3,'' RFC 1951, 1996.
-
-\bibitem{sennrich2016} R. Sennrich, B. Haddow, and A. Birch, ``Neural Machine Translation of Rare Words with Subword Units,'' Proceedings of the 54th Annual Meeting of the Association for Computational Linguistics (ACL), 1715--1725, 2016.
+\bibitem{zstd_dict2020} Y. Collet, ``Zstandard Dictionary Training,'' GitHub Repository, 2020.
 
 \bibitem{radford2019} A. Radford, J. Wu, R. Child, D. Luan, D. Amodei, and I. Sutskever, ``Language Models are Unsupervised Multitask Learners,'' OpenAI Blog, 2019.
 
 \bibitem{devlin2019} J. Devlin, M. W. Chang, K. Lee, and K. Toutanova, ``BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding,'' Proceedings of NAACL-HLT, 4171--4186, 2019.
 
-\bibitem{gori2015} M. Gori and M. Lippi, ``Time-series compression: A survey,'' International Journal of Data Mining, Modelling and Management, 7(1), 1--23, 2015.
+\bibitem{sennrich2016} R. Sennrich, B. Haddow, and A. Birch, ``Neural Machine Translation of Rare Words with Subword Units,'' Proceedings of the 54th Annual Meeting of the Association for Computational Linguistics (ACL), 1715--1725, 2016.
+
+\bibitem{brotli2015} J. Alakuijala et al., ``Brotli: A General Purpose Data Compression Library,'' Google, 2015.
+
+\bibitem{lz4} Y. Collet, ``LZ4: Extremely Fast Compression,'' 2013.
+
+\bibitem{dedup_storage2010} A. Z. Broder et al., ``Deduplication in Enterprise Backup,'' in \textit{Proceedings of FAST}, 2010.
+
+\bibitem{datadomain2007} M. Lillibridge et al., ``Sparse Indexing,'' Data Domain Whitepaper, 2007.
+
+\bibitem{git2005} L. Torvalds, ``Git: A Distributed Version-Control System,'' in \textit{Proceedings of Linux Symposium}, 2005.
+
+\bibitem{deutsch1996} P. Deutsch, ``DEFLATE Compressed Data Format Specification version 1.3,'' RFC 1951, 1996.
 
 \bibitem{burrows1994} M. Burrows and D. J. Wheeler, ``A block-sorting lossless data compression algorithm,'' Digital Equipment Corporation Technical Report, 124, 1994.
 
-\bibitem{li2013} S. Li and K. Li, ``Parallel lossless data compression on multicore processors,'' Journal of Parallel and Distributed Computing, 73(5), 608--620, 2013.
+\bibitem{cleary1984} J. G. Cleary and I. H. Witten, ``Data compression using adaptive coding and partial string matching,'' IEEE Transactions on Communications, 32(4), 396--402, 1984.
 
-\bibitem{ge2023} T. Ge and F. Wei, ``Prompt Caching for Efficient LLM Inference,'' Proceedings of the 2023 Conference on Empirical Methods in Natural Language Processing, 2023.
+\bibitem{rabin_fingerprint} M. O. Rabin, ``Fingerprinting by Random Polynomials,'' 1981.
+
+\bibitem{lz78} J. Ziv and A. Lempel, ``Compression of individual sequences via variable-rate coding,'' IEEE Transactions on Information Theory, 24(5), 530--536, 1978.
+
+\bibitem{lz77} A. Lempel and J. Ziv, ``A Universal Algorithm for Sequential Data Compression,'' IEEE Transactions on Information Theory, 1977.
+
+\bibitem{huffman1952} D. A. Huffman, ``A method for the construction of minimum-redundancy codes,'' Proceedings of the IRE, 40(9), 1098--1101, 1952.
+
+\bibitem{shannon1948} C. E. Shannon, ``A Mathematical Theory of Communication,'' Bell System Technical Journal, 27(3), 379--423, 1948.
 
 \end{thebibliography}
 
